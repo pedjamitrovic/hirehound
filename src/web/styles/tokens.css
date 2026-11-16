@@ -1,0 +1,101 @@
+/*
+ * Design tokens. Calm, dense, professional: neutral surfaces, one accent, states as soft tints.
+ * Colors use light-dark(): the system theme applies by default, data-theme on <html> overrides it.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+  --leading: 1.45;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 10px;
+
+  --sidebar-width: 212px;
+  --topbar-height: 48px;
+
+  /* Neutrals */
+  --bg: light-dark(#f7f7f8, #111316);
+  --surface: light-dark(#ffffff, #181a1f);
+  --surface-2: light-dark(#f2f3f5, #1f2228);
+  --surface-hover: light-dark(#eceef1, #262a31);
+  --border: light-dark(#e3e5e9, #2b2f37);
+  --border-strong: light-dark(#cfd3da, #3a3f49);
+  --text: light-dark(#1c1f24, #e8eaed);
+  --text-2: light-dark(#4b515b, #b4b9c2);
+  --text-3: light-dark(#7a818c, #868c97);
+  --focus: light-dark(#3b5bdb, #7c94ff);
+
+  /* Accent */
+  --accent: light-dark(#3b5bdb, #5b7bff);
+  --accent-hover: light-dark(#3451c4, #6f8bff);
+  --accent-text: #ffffff;
+  --accent-soft: light-dark(#edf1ff, #1f2a4d);
+
+  /* Feedback */
+  --danger: light-dark(#c92a2a, #ff6b6b);
+  --danger-soft: light-dark(#fff0f0, #3a1d1f);
+  --warning: light-dark(#b35c00, #ffb347);
+  --warning-soft: light-dark(#fff6e5, #3a2c16);
+  --success: light-dark(#2b8a3e, #51cf66);
+  --success-soft: light-dark(#ebfbee, #1b3323);
+
+  /* Job states: text on tint */
+  --state-found: light-dark(#5c636e, #aeb4bd);
+  --state-found-bg: light-dark(#eef0f3, #262a31);
+  --state-evaluated: light-dark(#1c6dd0, #74b0ff);
+  --state-evaluated-bg: light-dark(#e7f1fd, #1a2a40);
+  --state-tailoring: light-dark(#7048e8, #b197fc);
+  --state-tailoring-bg: light-dark(#f1ecfe, #2a2342);
+  --state-ready: light-dark(#a35c00, #ffc266);
+  --state-ready-bg: light-dark(#fff3df, #3a2d16);
+  --state-approved: light-dark(#0b7a75, #5fd3c9);
+  --state-approved-bg: light-dark(#e3f7f5, #16312f);
+  --state-applied: light-dark(#3b5bdb, #8ea2ff);
+  --state-applied-bg: light-dark(#edf1ff, #1f2a4d);
+  --state-screening: light-dark(#0c7ea4, #66d0f0);
+  --state-screening-bg: light-dark(#e3f5fb, #163240);
+  --state-interviewing: light-dark(#9c36b5, #e599f7);
+  --state-interviewing-bg: light-dark(#f8ecfb, #36203d);
+  --state-offer: light-dark(#2b8a3e, #69db7c);
+  --state-offer-bg: light-dark(#e6f7ea, #1b3323);
+  --state-accepted: light-dark(#ffffff, #0f1a12);
+  --state-accepted-bg: light-dark(#2b8a3e, #69db7c);
+  --state-rejected: light-dark(#b03a3a, #ff8787);
+  --state-rejected-bg: light-dark(#fcecec, #3a1d1f);
+  --state-closed: light-dark(#7a818c, #868c97);
+  --state-closed-bg: light-dark(#f0f1f3, #22252b);
+
+  --shadow-sm: 0 1px 2px light-dark(rgb(16 24 40 / 6%), rgb(0 0 0 / 40%));
+  --shadow: 0 1px 3px light-dark(rgb(16 24 40 / 8%), rgb(0 0 0 / 45%));
+  --shadow-lg: 0 12px 32px light-dark(rgb(16 24 40 / 16%), rgb(0 0 0 / 55%));
+
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}

@@ -1,0 +1,10 @@
+import { render } from "preact";
+import "./styles/tokens.css";
+import "./styles/base.css";
+import "./styles/components.css";
+import "./styles/screens.css";
+import "./state/theme.ts";
+import { App } from "./app.tsx";
+
+const root = document.getElementById("app");
+if (root) render(<App />, root);
