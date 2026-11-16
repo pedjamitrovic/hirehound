@@ -4,6 +4,7 @@ import type { ScreenProps } from "../app.tsx";
 import { Icon } from "../components/Icon.tsx";
 import { age, EmptyState, Link, Score, StateBadge } from "../components/ui.tsx";
 import { jobPath } from "../router.ts";
+import { addJobOpen } from "../state/actions.ts";
 import { jobList, workspace } from "../state/store.ts";
 
 const HEADING = new Intl.DateTimeFormat(undefined, {
@@ -129,7 +130,21 @@ export function TodayScreen(props: ScreenProps) {
         <div class="page" style={{ display: "grid", gap: "16px", maxWidth: "960px" }}>
           {all.length === 0 ? (
             <section class="card">
-              <EmptyState icon="pipeline" title="Your pipeline is empty">
+              <EmptyState
+                icon="pipeline"
+                title="Your pipeline is empty"
+                actions={
+                  <button
+                    type="button"
+                    class="btn primary"
+                    onClick={() => {
+                      addJobOpen.value = true;
+                    }}
+                  >
+                    <Icon name="plus" size={14} /> Add your first job <kbd>N</kbd>
+                  </button>
+                }
+              >
                 Jobs you add appear here when they need your attention: new postings to evaluate,
                 tailored CVs to review, follow-ups and interviews.
               </EmptyState>

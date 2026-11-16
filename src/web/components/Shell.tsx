@@ -1,5 +1,6 @@
 import type { ComponentChildren } from "preact";
 import { route } from "../router.ts";
+import { addJobOpen } from "../state/actions.ts";
 import { activeJobs, connection, jobList, workspace } from "../state/store.ts";
 import { Icon, type IconName } from "./Icon.tsx";
 import { Search } from "./Search.tsx";
@@ -99,6 +100,15 @@ export function TopBar(props: {
           onClick={props.onHelp}
         >
           <Icon name="help" />
+        </button>
+        <button
+          type="button"
+          class="btn primary"
+          onClick={() => {
+            addJobOpen.value = true;
+          }}
+        >
+          <Icon name="plus" size={14} /> Add job <kbd>N</kbd>
         </button>
       </div>
     </header>

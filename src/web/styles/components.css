@@ -897,7 +897,8 @@ dialog.dialog {
     text-decoration: none;
   }
 
-  &[aria-selected="true"] {
+  &[aria-selected="true"],
+  &[aria-current="page"] {
     color: var(--text);
     border-bottom-color: var(--accent);
   }
