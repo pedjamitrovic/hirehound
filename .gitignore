@@ -1,0 +1,25 @@
+# Dependencies and build output
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Personal data must never land in this public repo.
+# A workspace lives outside the repo; these catch accidents.
+workspace/
+hirehound-workspace/
+*.pdf
+!test/fixtures/**/*.pdf
+
+# Local tooling
+.DS_Store
+Thumbs.db
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea/
+PR_DESCRIPTION.md

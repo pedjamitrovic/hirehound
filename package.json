@@ -1,0 +1,41 @@
+{
+  "name": "hirehound",
+  "version": "0.1.0",
+  "description": "Local-first, Claude-powered job search workbench: evaluate roles honestly, tailor CVs only from verified experience, approve every application.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pedjamitrovic/hirehound.git"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "hirehound": "bin/hirehound.ts"
+  },
+  "scripts": {
+    "dev": "node --watch bin/hirehound.ts serve --dev",
+    "build": "vite build",
+    "start": "node bin/hirehound.ts serve",
+    "init": "node bin/hirehound.ts init",
+    "test": "node --test \"src/**/*.test.ts\" \"test/**/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json && tsc -p src/web/tsconfig.json",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "check": "npm run lint && npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@preact/signals": "^2.11.4",
+    "preact": "^11.2.0",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.8",
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  }
+}
