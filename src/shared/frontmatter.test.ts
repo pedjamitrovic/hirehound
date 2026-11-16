@@ -12,7 +12,7 @@ describe("splitFrontmatter", () => {
   });
 
   it("handles CRLF and a BOM", () => {
-    const split = splitFrontmatter("﻿---\r\ntitle: EM\r\n---\r\nBody\r\n");
+    const split = splitFrontmatter("\ufeff---\r\ntitle: EM\r\n---\r\nBody\r\n");
     assert.equal(split.yaml, "title: EM");
     assert.equal(split.body, "Body\n");
   });
