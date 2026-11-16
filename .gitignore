@@ -9,9 +9,10 @@ dist/
 !.env.example
 
 # Personal data must never land in this public repo.
-# A workspace lives outside the repo; these catch accidents.
-workspace/
-hirehound-workspace/
+# A workspace lives outside the repo; these catch accidents at the repo root only
+# (unanchored, they would also match src/server/workspace).
+/workspace/
+/hirehound-workspace/
 *.pdf
 !test/fixtures/**/*.pdf
 
