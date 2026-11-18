@@ -22,3 +22,15 @@ export const POSTING_SOURCES = [
   "linkedin-email",
   "browser",
 ] as const;
+
+/** Experience bank entry id prefixes per kind (ROLE-003, ACH-014, ...). */
+export const BANK_PREFIXES = {
+  role: "ROLE",
+  achievement: "ACH",
+  project: "PRJ",
+  education: "EDU",
+  certification: "CERT",
+  skill: "SKL",
+  language: "LANG",
+  award: "AWD",
+} as const;
