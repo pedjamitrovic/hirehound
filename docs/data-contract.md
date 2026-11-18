@@ -56,8 +56,11 @@ port: 4280                         # optional
     changes.md                    # each change vs base and its bank entries        (M3)
     verification.json             # checks, verifier result per claim, PDF render   (M3)
     cv.pdf                        # the exact PDF approved and sent                 (M3)
-    cover-letter.md / .pdf        # optional                                        (M4)
+    cover-letter.md               # optional cover letter, cited like the CV        (M4)
+    cover-letter.verification.json # its checks, verdicts and render               (M4)
+    cover-letter.pdf              # the exact letter approved and sent              (M4)
     application.md                # answers used, confirmation snapshot             (M4)
+    confirmation.png              # the page after you submitted (assisted mode)    (M4)
     interview/                    # prep and debriefs                               (M6)
     ai-log.jsonl                  # model, tokens and cost per AI task              (M3)
 ```
@@ -224,8 +227,11 @@ for that engine), `duration_ms`, and `error` on failure. It never contains promp
 An Anthropic API key comes from `ANTHROPIC_API_KEY` or `~/.config/hirehound/credentials.yaml`
 (`anthropic_api_key`, written readable by your user only). Neither is ever written to the workspace.
 
+Assisted apply (M4) uses its own browser profile in `~/.config/hirehound/browser-profile`: you sign
+in to job sites there once; your everyday browser profile is never used.
+
 Workspace overrides: `prompts/<task>.md` replaces a built-in prompt (`draft-bank`, `apply-answers`,
-`draft-base`, `evaluate`, `tailor`, `verify`); `templates/<theme>.css` replaces a built-in CV theme
+`draft-base`, `evaluate`, `tailor`, `verify`, `cover-letter`, `map-form`); `templates/<theme>.css` replaces a built-in CV theme
 (`classic`, `modern`). The CV document turns off contextual font alternates after the theme CSS:
 some glyph variants map to private code points and would come out of the PDF as garbage for an ATS.
 
@@ -278,10 +284,14 @@ approval:                        # M3: written when you approve the PDF
   cv_sha256: <64 hex>            # SHA-256 of cv.pdf exactly as approved
   base: em
   override_reason: Referral      # only when approved below scoring.threshold
+cover_letter_approval:           # M4: the cover letter's own approval
+  at: 2026-11-17T09:10:00+01:00
+  sha256: <64 hex>               # SHA-256 of cover-letter.pdf exactly as approved
 application:                     # M4, or method: external from M1
   at: 2026-11-17T09:30:00+01:00
   method: manual                 # manual | assisted | external
   cv_sha256: <64 hex>            # must equal approval.cv_sha256 unless external
+  cover_letter_sha256: <64 hex>  # when the approved cover letter was sent too
 ```
 
 - `by` is `user`, `system` or `ai`. `reason` is required for `skipped`, `withdrawn` and external
@@ -407,3 +417,61 @@ Everything known about one exact version of `cv.md`:
 
 `engine` is null when every verdict was reused. `jobs/<id>/ai-log.jsonl` repeats the workspace
 `ai-log.jsonl` lines for that job (with `job` set), for the cost per job.
+
+## cover-letter.md (M4)
+
+Paragraphs in the CV dialect, no headings or bullets, each ending with an evidence marker. The
+greeting and the sign-off live in the frontmatter, and the template adds the date, the company and
+your name:
+
+```yaml
+job: 2026-11-18_initrode-logistics_engineering-manager-developer-platform
+angle: fit                      # fit | impact | motivation | brief
+greeting: Dear Initrode Logistics hiring team,
+closing: Kind regards,
+generated_at: 2026-11-18T21:34:00+01:00
+engine: { id: anthropic-api, model: claude-opus-5-5 }
+theme: classic                  # the CV's theme
+notes: Leads with team growth and reliability.
+```
+
+It is checked exactly like the CV, into `cover-letter.verification.json` (same format as
+`verification.json`, page limit 1), with one difference: statements about the company or the role
+may rest on the posting, so the deterministic checks and the verifier also get the posting text.
+Statements about you still need cited bank entries. Approving it records
+`cover_letter_approval` in `status.yaml`; editing the letter makes that approval stale, because
+the PDF changes. Writing or changing a cover letter is refused once the application was recorded.
+
+## application.md (M4)
+
+The permanent record of what you sent. Hirehound writes it when you confirm "I submitted"; it never
+submits a form itself. The frontmatter is authoritative:
+
+```yaml
+version: 1
+applied_at: 2026-11-18T21:25:00+01:00
+method: assisted                # manual | assisted
+url: https://jobs.example.com/initrode/123/apply
+cv: { file: cv.pdf, sha256: <64 hex> }               # always the approved PDF (guard G3)
+cover_letter: { file: cover-letter.pdf, sha256: <64 hex> }   # only when sent
+answers:                        # what assisted mode filled in, field by field
+  - question: What is your notice period?
+    answer: One month
+    source: library             # profile | library | job | you | document
+    answer_id: notice-period
+confirmation:
+  captured_at: 2026-11-18T21:25:00+01:00
+  url: https://jobs.example.com/initrode/123/thanks
+  title: Thank you for applying
+  text: Thanks for applying to Initrode Logistics!   # pasted (manual) or read from the page
+  screenshot: confirmation.png                        # assisted mode
+```
+
+The body repeats it for reading. Recording the application moves the job from approved to applied
+(guard G3) and sets `application` in `status.yaml`; if that move is refused, the files are removed
+again.
+
+Assisted mode never answers equal-opportunity or demographic questions, questions about health or
+history, consent or terms, or answers marked `sensitive` in `answers.yaml`, whatever the model
+suggests: they come back to you. Answers you type there can be added to `profile/answers.yaml`
+(a question already in the library gets its answer updated; comments are kept).

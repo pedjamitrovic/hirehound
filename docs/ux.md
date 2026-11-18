@@ -138,3 +138,18 @@ Checks: numbers ok . companies ok . titles ok . dates ok    Verifier: 23 support
 ```
 
 Hovering an evidence chip shows the bank entry; clicking a WEAKENED marker shows the verifier's reason and a suggested rewrite. Approve is disabled while anything blocking remains, and the bar says why.
+
+### Application and cover letter (M4)
+
+The Application tab opens once the CV is approved. "Apply yourself" is a five-step checklist: open
+the posting, download the approved CV (named "Your Name CV - Company.pdf"), the cover letter if one is
+approved, fill the form with the copy-ready answers on the right, then "I submitted it". "Assisted"
+opens the application in Hirehound's own browser window, fills the page and lists what it filled and
+where each value came from; questions it must not answer (equal-opportunity, consent, sensitive saved
+answers, motivation) appear as "Needs your answer" with an option to save them to your answers. It
+never presses Submit. After applying, the tab shows the record: the PDF sent with its SHA-256, every
+answer and the confirmation.
+
+The Cover letter tab works like the CV review: each paragraph with its evidence chips and verdict,
+"Use this wording" for weakened lines, Rewrite (another angle or a note), Edit, the PDF beside it, and
+its own Approve.
