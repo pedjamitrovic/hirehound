@@ -2,18 +2,22 @@ import type { AnswersFile } from "../shared/schemas/answers.ts";
 import type {
   AiSettings,
   ApiErrorBody,
+  ApproveBody,
   BaseDetail,
   BaseSummary,
   BulkTransitionBody,
   BulkTransitionResult,
   ContactBody,
   CreateJobRequest,
+  CvView,
+  EvaluationView,
   ImportInfo,
   JobDetail,
   JobSummary,
   NoteBody,
   PostingDraft,
   ProfileFile,
+  TailorBody,
   TaskInfo,
   TransitionBody,
   WorkspaceInfo,
@@ -99,6 +103,20 @@ export const api = {
     request<JobDetail>("DELETE", `${job(id)}/contacts/${index}?name=${encodeURIComponent(name)}`),
   openFolder: (id: string) => request<void>("POST", `${job(id)}/open-folder`, {}),
   rawPostingUrl: (id: string) => `${job(id)}/raw/posting.html`,
+
+  // M3: evaluate, tailor, check, review, approve. Long work returns a TaskInfo (202).
+  evaluate: (id: string) => request<TaskInfo>("POST", `${job(id)}/evaluate`),
+  evaluation: (id: string) => request<EvaluationView>("GET", `${job(id)}/evaluation`),
+  tailor: (id: string, body: TailorBody = {}) =>
+    request<TaskInfo>("POST", `${job(id)}/tailor`, body),
+  cv: (id: string) => request<CvView>("GET", `${job(id)}/cv`),
+  saveCv: (id: string, text: string, expectedSha256: string | null) =>
+    request<TaskInfo>("PUT", `${job(id)}/cv`, { text, expectedSha256 }),
+  checkCv: (id: string) => request<TaskInfo>("POST", `${job(id)}/cv/check`),
+  cvPdfUrl: (id: string, version?: string) =>
+    `${job(id)}/cv.pdf${version ? `?v=${version.slice(0, 12)}` : ""}`,
+  approve: (id: string, body: ApproveBody = {}) =>
+    request<JobDetail>("POST", `${job(id)}/approve`, body),
 
   // Profile files. Saves send the SHA-256 they were read with; a 409 means "reload first".
   contact: () => request<ProfileFile<Contact>>("GET", "/api/profile/contact"),

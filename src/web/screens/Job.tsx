@@ -21,6 +21,8 @@ import { JOB_TABS, jobPath, navigate, type TabId } from "../router.ts";
 import { openMove } from "../state/actions.ts";
 import { jobRevisions, upsertJob } from "../state/store.ts";
 import { toast } from "../state/toasts.ts";
+import { CvTab } from "./job/CvTab.tsx";
+import { EvaluationTab } from "./job/EvaluationTab.tsx";
 import { DiagnosticList } from "./Settings.tsx";
 
 const TAB_LABELS: Record<TabId, string> = {
@@ -34,17 +36,9 @@ const TAB_LABELS: Record<TabId, string> = {
 };
 
 const LATER: Partial<Record<TabId, { milestone: string; text: string }>> = {
-  evaluation: {
-    milestone: "M3",
-    text: "Role summary, requirement matrix with evidence from your bank, fit score, compensation, work authorisation, legitimacy and a recommendation.",
-  },
-  cv: {
-    milestone: "M3",
-    text: "The tailored CV side by side with the posting, every changed line linked to its evidence, verifier results and the PDF to approve.",
-  },
   "cover-letter": {
-    milestone: "M3",
-    text: "An optional cover letter with its own approval, following your cover letter policy.",
+    milestone: "M4",
+    text: "An optional cover letter with its own approval, following your cover letter policy, next to the application.",
   },
   application: {
     milestone: "M4",
@@ -55,6 +49,8 @@ const LATER: Partial<Record<TabId, { milestone: string; text: string }>> = {
     text: "Likely questions, matching stories, the exact CV you sent and a place for debrief notes.",
   },
 };
+
+const RECOMMENDATION = { apply: "Apply", stretch: "Stretch", skip: "Skip" } as const;
 
 const ROLE_LABELS: Record<PersonRole, string> = {
   recruiter: "Recruiter",
@@ -376,6 +372,7 @@ function Contacts(props: { detail: JobDetail; onChange: (d: JobDetail) => void }
 }
 
 function Files(props: { detail: JobDetail }) {
+  const { usage } = props.detail;
   return (
     <section class="side-section">
       <h3>
@@ -397,6 +394,13 @@ function Files(props: { detail: JobDetail }) {
           </li>
         ))}
       </ul>
+      {usage.tasks > 0 ? (
+        <p class="muted small-print">
+          AI work on this job: {usage.tasks} {usage.tasks === 1 ? "task" : "tasks"},{" "}
+          {((usage.inputTokens + usage.outputTokens) / 1000).toFixed(1)}k tokens
+          {usage.costUsd !== null ? `, about $${usage.costUsd.toFixed(2)}` : ""}.
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -532,6 +536,14 @@ export function JobScreen(props: ScreenProps & { id: string; tab: TabId }) {
               </h1>
               <div class="job-facts">
                 <StateBadge state={summary.state} external={summary.appliedExternally} />
+                {summary.recommendation ? (
+                  <span
+                    class={`badge ${summary.recommendation === "apply" ? "success" : summary.recommendation === "skip" ? "danger" : "warning"}`}
+                    title="The evaluation's recommendation"
+                  >
+                    {RECOMMENDATION[summary.recommendation]}
+                  </span>
+                ) : null}
                 {summary.location ? <span>{summary.location}</span> : null}
                 {WORKPLACE[summary.workplace] ? <span>{WORKPLACE[summary.workplace]}</span> : null}
                 {front?.salary?.raw ? <span>{front.salary.raw}</span> : null}
@@ -558,7 +570,7 @@ export function JobScreen(props: ScreenProps & { id: string; tab: TabId }) {
             </Link>
           ))}
         </nav>
-        <div class="job-body">
+        <div class={`job-body${tab === "cv" ? " wide" : ""}`}>
           <div class="job-main">
             {detail.diagnostics.length ? (
               <Notice kind={summary.errors ? "danger" : "warning"}>
@@ -567,6 +579,8 @@ export function JobScreen(props: ScreenProps & { id: string; tab: TabId }) {
               </Notice>
             ) : null}
             {tab === "posting" ? <PostingTab detail={detail} /> : null}
+            {tab === "evaluation" ? <EvaluationTab detail={detail} /> : null}
+            {tab === "cv" ? <CvTab detail={detail} onChange={onChange} /> : null}
             {tab === "timeline" ? <TimelineTab detail={detail} /> : null}
             {later ? (
               <EmptyState icon="info" title={`${TAB_LABELS[tab]} arrives in ${later.milestone}`}>
@@ -574,11 +588,13 @@ export function JobScreen(props: ScreenProps & { id: string; tab: TabId }) {
               </EmptyState>
             ) : null}
           </div>
-          <aside class="job-side">
-            <Notes detail={detail} onChange={onChange} inputRef={noteInput} />
-            <Contacts detail={detail} onChange={onChange} />
-            <Files detail={detail} />
-          </aside>
+          {tab === "cv" ? null : (
+            <aside class="job-side">
+              <Notes detail={detail} onChange={onChange} inputRef={noteInput} />
+              <Contacts detail={detail} onChange={onChange} />
+              <Files detail={detail} />
+            </aside>
+          )}
         </div>
       </div>
     </>

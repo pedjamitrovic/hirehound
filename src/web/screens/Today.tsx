@@ -1,11 +1,14 @@
 import type { ComponentChildren } from "preact";
 import type { JobSummary, ProfileFileState } from "../../shared/schemas/api.ts";
+import { api, errorMessage } from "../api.ts";
 import type { ScreenProps } from "../app.tsx";
 import { Icon } from "../components/Icon.tsx";
+import { useAiReady } from "../components/TaskStatus.tsx";
 import { age, EmptyState, Link, Score, StateBadge } from "../components/ui.tsx";
-import { jobPath } from "../router.ts";
+import { jobPath, type TabId } from "../router.ts";
 import { addJobOpen } from "../state/actions.ts";
-import { jobList, workspace } from "../state/store.ts";
+import { jobList, runningTasks, workspace } from "../state/store.ts";
+import { toast } from "../state/toasts.ts";
 
 const HEADING = new Intl.DateTimeFormat(undefined, {
   weekday: "short",
@@ -13,7 +16,37 @@ const HEADING = new Intl.DateTimeFormat(undefined, {
   month: "short",
 });
 
-function JobRows(props: { jobs: JobSummary[]; empty: string }) {
+/** Starts an evaluation for every job in the list; the task runner works through them a few at a time. */
+function EvaluateAll(props: { jobs: JobSummary[] }) {
+  const aiReady = useAiReady();
+  const running = runningTasks.value.some((t) => t.kind === "evaluate");
+  return (
+    <button
+      type="button"
+      class="btn small"
+      disabled={aiReady === false || running}
+      title={aiReady === false ? "Set up Claude in Settings first" : undefined}
+      onClick={async () => {
+        let started = 0;
+        for (const job of props.jobs) {
+          try {
+            await api.evaluate(job.id);
+            started++;
+          } catch (e) {
+            toast(`${job.company}: ${errorMessage(e)}`, "error");
+          }
+        }
+        if (started) toast(`Evaluating ${started} ${started === 1 ? "job" : "jobs"}`, "success");
+      }}
+    >
+      {running
+        ? "Evaluating..."
+        : `Evaluate ${props.jobs.length === 1 ? "it" : `all ${props.jobs.length}`}`}
+    </button>
+  );
+}
+
+function JobRows(props: { jobs: JobSummary[]; empty: string; tab?: TabId }) {
   if (props.jobs.length === 0) {
     return <div class="card-body muted">{props.empty}</div>;
   }
@@ -21,7 +54,7 @@ function JobRows(props: { jobs: JobSummary[]; empty: string }) {
     <ul class="list">
       {props.jobs.map((job) => (
         <li key={job.id}>
-          <Link class="list-row" href={jobPath(job.id)}>
+          <Link class="list-row" href={jobPath(job.id, props.tab)}>
             <Score score={job.score} band={job.band} />
             <span class="company truncate">{job.company}</span>
             <span class="truncate secondary">{job.title}</span>
@@ -168,11 +201,23 @@ export function TodayScreen(props: ScreenProps) {
           ) : (
             <>
               {toReview.length > 0 ? (
-                <Section title="Needs your review" count={toReview.length}>
-                  <JobRows jobs={toReview} empty="" />
+                <Section
+                  title="Needs your review"
+                  count={toReview.length}
+                  action={
+                    <Link class="btn primary small" href={jobPath(toReview[0]?.id ?? "", "cv")}>
+                      Start reviewing
+                    </Link>
+                  }
+                >
+                  <JobRows jobs={toReview} empty="" tab="cv" />
                 </Section>
               ) : null}
-              <Section title="To evaluate" count={toEvaluate.length}>
+              <Section
+                title="To evaluate"
+                count={toEvaluate.length}
+                action={toEvaluate.length > 0 ? <EvaluateAll jobs={toEvaluate} /> : null}
+              >
                 <JobRows jobs={toEvaluate} empty="Nothing new. Add a job when you find one." />
               </Section>
               {inProgress.length > 0 ? (
