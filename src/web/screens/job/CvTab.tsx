@@ -67,9 +67,9 @@ function useEvaluation(id: string): EvaluationView | null {
 
 // ---------- Claim rows ----------
 
-function ClaimRow(props: {
+export function ClaimRow(props: {
   claim: ClaimView;
-  view: CvView;
+  view: Pick<CvView, "evidence">;
   showDiff: boolean;
   highlight: boolean;
   open: boolean;
@@ -341,7 +341,7 @@ function ApproveDialog(props: {
 
 // ---------- The review ----------
 
-function ChecksSummary(props: { view: CvView }) {
+export function ChecksSummary(props: { view: Pick<CvView, "checks" | "verification" | "render"> }) {
   const { view } = props;
   const v = view.verification;
   return (

@@ -45,6 +45,8 @@ export const RenderInfo = z.object({
     missing: z.array(z.string()),
     /** Characters that came out as private-use or replacement code points. */
     garbled: z.number().int().min(0),
+    /** Fonts embedded as Type3 glyphs, which some ATS parse poorly. */
+    type3_fonts: z.number().int().min(0).default(0),
   }),
 });
 

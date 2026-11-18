@@ -1,10 +1,13 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ViteDevServer } from "vite";
 import { AiService } from "./ai/service.ts";
 import type { AiEngine } from "./ai/types.ts";
 import type { AppContext } from "./app-context.ts";
+import { ApplyBrowser } from "./apply/browser.ts";
+import { ApplyService } from "./apply/service.ts";
 import { configDir } from "./config.ts";
 import { checkRequest } from "./http/guard.ts";
 import { HttpError, Router, sendError } from "./http/router.ts";
@@ -44,6 +47,8 @@ export type ServerOptions = {
   aiEngine?: AiEngine;
   /** Test seam: a PDF renderer (tests without a browser use a fake). */
   pdf?: PdfRenderer;
+  /** Test seam: the assisted-apply browser (tests run it headless with a temp profile). */
+  applyBrowser?: ApplyBrowser;
 };
 
 export type RunningServer = {
@@ -97,12 +102,16 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   const pdf = options.pdf ?? new PdfRenderer();
   const profile = new ProfileService({ root, pdf });
   const jobs = new JobService({ root, index });
+  const browser =
+    options.applyBrowser ??
+    new ApplyBrowser({ profileDir: join(options.configDir ?? configDir(), "browser-profile") });
   const context: AppContext = {
     root,
     index,
     hub,
     jobs,
     flow: new JobFlow({ root, index, jobs, profile, ai, tasks, pdf }),
+    apply: new ApplyService({ root, index, jobs, profile, ai, tasks, browser }),
     snapshots: new SnapshotCache(),
     fetchPosting: options.fetchPosting ?? ((url) => fetchPosting(url)),
     openFolder: options.openFolder ?? openExternal,
@@ -199,6 +208,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
       tasks.cancelAll();
       hub.close();
       await pdf.close();
+      await browser.close();
       await vite?.close();
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));

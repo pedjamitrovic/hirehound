@@ -2,12 +2,18 @@ import type { AnswersFile } from "../shared/schemas/answers.ts";
 import type {
   AiSettings,
   ApiErrorBody,
+  ApplicationView,
+  AppliedBody,
   ApproveBody,
+  AssistAnswerBody,
+  AssistState,
   BaseDetail,
   BaseSummary,
   BulkTransitionBody,
   BulkTransitionResult,
   ContactBody,
+  CoverLetterBody,
+  CoverLetterView,
   CreateJobRequest,
   CvView,
   EvaluationView,
@@ -117,6 +123,30 @@ export const api = {
     `${job(id)}/cv.pdf${version ? `?v=${version.slice(0, 12)}` : ""}`,
   approve: (id: string, body: ApproveBody = {}) =>
     request<JobDetail>("POST", `${job(id)}/approve`, body),
+
+  // M4: cover letter, with its own checks and approval.
+  coverLetter: (id: string) => request<CoverLetterView>("GET", `${job(id)}/cover-letter`),
+  writeCoverLetter: (id: string, body: CoverLetterBody) =>
+    request<TaskInfo>("POST", `${job(id)}/cover-letter`, body),
+  saveCoverLetter: (id: string, text: string, expectedSha256: string | null) =>
+    request<TaskInfo>("PUT", `${job(id)}/cover-letter`, { text, expectedSha256 }),
+  checkCoverLetter: (id: string) => request<TaskInfo>("POST", `${job(id)}/cover-letter/check`),
+  approveCoverLetter: (id: string) => request<JobDetail>("POST", `${job(id)}/cover-letter/approve`),
+  coverLetterPdfUrl: (id: string, download = false, version?: string) =>
+    `${job(id)}/cover-letter.pdf?${new URLSearchParams({ ...(download ? { download: "1" } : {}), ...(version ? { v: version.slice(0, 12) } : {}) })}`,
+
+  // M4: apply. Hirehound never submits a form; "applied" records what you submitted.
+  application: (id: string) => request<ApplicationView>("GET", `${job(id)}/application`),
+  applied: (id: string, body: AppliedBody) =>
+    request<JobDetail>("POST", `${job(id)}/applied`, body),
+  cvDownloadUrl: (id: string) => `${job(id)}/cv.pdf?download=1`,
+  confirmationUrl: (id: string) => `${job(id)}/confirmation.png`,
+  assistOpen: (id: string, url: string) =>
+    request<AssistState>("POST", `${job(id)}/assist/open`, { url }),
+  assistFill: (id: string) => request<TaskInfo>("POST", `${job(id)}/assist/fill`),
+  assistAnswer: (id: string, body: AssistAnswerBody) =>
+    request<AssistState>("POST", `${job(id)}/assist/answer`, body),
+  assistClose: (id: string) => request<AssistState>("POST", `${job(id)}/assist/close`),
 
   // Profile files. Saves send the SHA-256 they were read with; a 409 means "reload first".
   contact: () => request<ProfileFile<Contact>>("GET", "/api/profile/contact"),

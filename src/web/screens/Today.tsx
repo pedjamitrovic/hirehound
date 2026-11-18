@@ -167,7 +167,8 @@ export function TodayScreen(props: ScreenProps) {
   const all = jobList.value;
   const toEvaluate = all.filter((j) => j.state === "found");
   const toReview = all.filter((j) => j.state === "ready");
-  const inProgress = all.filter((j) => ["evaluated", "tailoring", "approved"].includes(j.state));
+  const toApply = all.filter((j) => j.state === "approved");
+  const inProgress = all.filter((j) => ["evaluated", "tailoring"].includes(j.state));
   const applications = all.filter((j) =>
     ["applied", "screening", "interviewing", "offer"].includes(j.state),
   );
@@ -211,6 +212,11 @@ export function TodayScreen(props: ScreenProps) {
                   }
                 >
                   <JobRows jobs={toReview} empty="" tab="cv" />
+                </Section>
+              ) : null}
+              {toApply.length > 0 ? (
+                <Section title="Ready to apply" count={toApply.length}>
+                  <JobRows jobs={toApply} empty="" tab="application" />
                 </Section>
               ) : null}
               <Section

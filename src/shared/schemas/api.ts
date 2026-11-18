@@ -3,9 +3,13 @@
 import { z } from "zod";
 import type { CheckId, CheckIssue } from "../cv/checks.ts";
 import type { Inline } from "../cv/types.ts";
+import { COVER_LETTER_ANGLES } from "../enums.ts";
 import type { ScoreResult } from "../score.ts";
 import type { TransitionOption } from "../states.ts";
+import type { Answer } from "./answers.ts";
+import type { AnswerSource, ApplicationFile, UsedAnswer } from "./application.ts";
 import { BaseId, JobId, type SalaryRange } from "./common.ts";
+import type { CoverLetterAngle } from "./cv.ts";
 import type { EvaluationFrontmatter, ScoreBand } from "./evaluation.ts";
 import {
   EmploymentType,
@@ -339,6 +343,128 @@ export const ApproveBody = z.object({
   overrideReason: z.string().trim().max(2000).optional(),
 });
 
+// ---------- M4: cover letter ----------
+
+export type CoverLetterView = {
+  text: string;
+  sha256: string;
+  angle: CoverLetterAngle | null;
+  greeting: string | null;
+  closing: string | null;
+  generatedAt: string | null;
+  notes: string | null;
+  rows: CvRow[];
+  checks: { issues: CheckIssue[]; errors: Record<CheckId, number> };
+  verification: CvView["verification"];
+  render: CvView["render"];
+  evidence: Record<string, EvidenceInfo>;
+  /** current: the approval still matches cover-letter.pdf. */
+  approval: { at: string; sha256: string; current: boolean } | null;
+  approve: { allowed: boolean; blockers: string[] };
+  policy: "always" | "when-requested" | "never";
+};
+
+export const CoverLetterBody = z.object({
+  angle: z.enum(COVER_LETTER_ANGLES).default("fit"),
+  feedback: z.string().trim().min(1, "Say what should change").max(4000).optional(),
+});
+export type CoverLetterBody = z.input<typeof CoverLetterBody>;
+
+// ---------- M4: apply ----------
+
+/** A field on an application form, as read from the page. */
+export type FormField = {
+  /** data-hirehound-id given to the element (for radios: the first button). */
+  id: string;
+  type:
+    | "text"
+    | "email"
+    | "tel"
+    | "url"
+    | "number"
+    | "date"
+    | "textarea"
+    | "select"
+    | "radio"
+    | "checkbox"
+    | "file"
+    | "combobox";
+  label: string;
+  required: boolean;
+  /** Select options or radio choices (with the button's id). */
+  options: { value: string; label: string; id?: string }[];
+  /** What the field holds now ("true" for a ticked checkbox). */
+  value: string;
+};
+
+export type FieldOutcome = FormField & {
+  status: "filled" | "uploaded" | "ask" | "kept" | "skipped" | "failed";
+  /** What Hirehound put in. */
+  filled?: string;
+  source?: AnswerSource;
+  answerId?: string;
+  /** Why it was asked, skipped or failed. */
+  note?: string;
+  /** A proposed answer for a question that needs your decision. */
+  suggestion?: string;
+};
+
+export type AssistState = {
+  /** A browser tab is open for this job. */
+  open: boolean;
+  url: string | null;
+  title: string | null;
+  /** A CAPTCHA or bot check is on the page: you solve it yourself. */
+  captcha: boolean;
+  /** The last page Hirehound read and filled. */
+  fields: FieldOutcome[];
+  filledAt: string | null;
+  /** Everything filled in this session, for the application record. */
+  answers: UsedAnswer[];
+};
+
+export type ApplicationView = {
+  state: JobState;
+  mode: "manual" | "assisted";
+  url: string | null;
+  cv: { sha256: string | null; approved: boolean; fileName: string };
+  coverLetter: { sha256: string; approved: boolean; fileName: string } | null;
+  /** Contact details as copy-ready fields. */
+  contact: { label: string; value: string }[];
+  answers: Answer[];
+  answersSha256: string | null;
+  record: ApplicationFile | null;
+  /** Why "I submitted" is not possible yet. */
+  blockers: string[];
+  assist: AssistState;
+};
+
+export const AppliedBody = z.object({
+  method: z.enum(["manual", "assisted"]),
+  url: z.string().trim().max(2000).optional(),
+  confirmationText: z.string().max(20_000).optional(),
+  /** Include the approved cover letter in the record. */
+  coverLetter: z.boolean().default(false),
+});
+
+export const AssistOpenBody = z.object({ url: HttpUrl });
+
+export const AssistAnswerBody = z.object({
+  answers: z
+    .array(
+      z.object({
+        fieldId: z.string().min(1).max(100),
+        value: z.string().max(10_000),
+        /** Also add it to profile/answers.yaml. */
+        save: z.boolean().default(false),
+      }),
+    )
+    .min(1)
+    .max(100),
+});
+
+export type AppliedBody = z.input<typeof AppliedBody>;
+export type AssistAnswerBody = z.input<typeof AssistAnswerBody>;
 export type TailorBody = z.input<typeof TailorBody>;
 export type CvSaveBody = z.input<typeof CvSaveBody>;
 export type ApproveBody = z.input<typeof ApproveBody>;

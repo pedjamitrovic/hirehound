@@ -2,7 +2,7 @@
 
 🐕 Hirehound: a local-first web app that sniffs out the right jobs and tailors your CV for each one, using only what you've actually done. Every claim is linked to your real experience, you approve every application, and you always press Submit. Powered by Claude.
 
-> **Status: early development.** Working today: the job pipeline (add jobs by link or text, Kanban and table, job dossier), onboarding (import your CVs, Claude drafts an evidence-linked experience bank you review, base CVs with PDF preview), and the hero flow: evaluate a posting, tailor a CV from a base, blocking deterministic checks and a faithfulness verifier, side-by-side review and approval locked to the PDF's SHA-256. Applying and cover letters arrive in M4. See [the PRD](docs/PRD.md) for the full plan.
+> **Status: early development.** Working today: the job pipeline (add jobs by link or text, Kanban and table, job dossier), onboarding (import your CVs, Claude drafts an evidence-linked experience bank you review, base CVs with PDF preview), the hero flow (evaluate a posting, tailor a CV from a base, blocking deterministic checks and a faithfulness verifier, side-by-side review and approval locked to the PDF's SHA-256), and applying: a manual checklist or assisted filling in a visible browser that never presses Submit, a verified cover letter, and a permanent record of what was sent. Discovery arrives in M5. See [the PRD](docs/PRD.md) for the full plan.
 
 ## Why
 
@@ -74,7 +74,7 @@ Conventions are in [CLAUDE.md](CLAUDE.md). The stack is deliberately small: Node
 
 Hirehound stands on the shoulders of [career-ops](https://github.com/career-ops-hq/career-ops) (MIT), the most complete open-source AI job search pipeline we know of. Several of its ideas shape Hirehound: multi-block evaluation, weighted requirements labelled by evidence source, legitimacy and ghost-job checks, the score guardrail, the anti-fabrication checks, the STAR+R story bank, files as the canonical store with a documented data contract, and editable prompts. Hirehound is a separate project with its own code; it differs mainly in being web-first, in linking every tailored claim to evidence with a blocking faithfulness verifier, in supporting multiple base profiles, and in locking approval to the exact PDF.
 
-The CV themes use the [Inter](https://rsms.me/inter/) typeface by The Inter Project Authors, bundled under the SIL Open Font License 1.1 (see `src/server/pdf/fonts/OFL.txt`).
+The CV themes use the [Inter](https://rsms.me/inter/) typeface by The Inter Project Authors, installed from the [`@fontsource/inter`](https://fontsource.org/fonts/inter) package under the SIL Open Font License 1.1.
 
 ## License
 

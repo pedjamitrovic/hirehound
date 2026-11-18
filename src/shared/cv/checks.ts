@@ -261,8 +261,16 @@ export function emptyCheckCounts(): Record<CheckId, number> {
   return Object.fromEntries(CHECK_IDS.map((id) => [id, 0])) as Record<CheckId, number>;
 }
 
-/** Runs every deterministic check on a parsed tailored CV against the experience bank. */
-export function checkTailoredCv(doc: CvDoc, bank: BankFile | null): CheckResult {
+/**
+ * Runs every deterministic check on a parsed tailored CV (or cover letter) against the experience
+ * bank. `context` is extra text claims may draw figures and names from: for a cover letter, the
+ * posting, so "your 60 services" is fine when the posting says so.
+ */
+export function checkTailoredCv(
+  doc: CvDoc,
+  bank: BankFile | null,
+  options: { context?: string | undefined } = {},
+): CheckResult {
   const index = bank ? indexBank(bank) : new Map<string, IndexedEntry>();
   const companies = [
     ...new Set(bank?.roles.map((r) => r.company.trim()).filter((c) => c.length >= 2) ?? []),
@@ -291,6 +299,7 @@ export function checkTailoredCv(doc: CvDoc, bank: BankFile | null): CheckResult 
 
     const cited = citedEntries(claim.ev, index);
     const corpus = cited.flatMap((e) => entryStrings(e.entry as Record<string, unknown>));
+    if (options.context) corpus.push(options.context);
     const corpusText = corpus.join("\n");
 
     // Dates (entry headings) and numbers.

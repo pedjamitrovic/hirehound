@@ -287,6 +287,17 @@ export function extractPdfText(pdf: Uint8Array): string {
   return pages.join("\n\f\n");
 }
 
+/** How many fonts of each subtype the PDF embeds ("Type0", "TrueType", "Type3", ...). */
+export function pdfFontTypes(pdf: Uint8Array): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const obj of readObjects(Buffer.from(pdf)).values()) {
+    if (!/\/Type\s*\/Font\b/.test(obj.dict)) continue;
+    const subtype = /\/Subtype\s*\/(\w+)/.exec(obj.dict)?.[1];
+    if (subtype) counts[subtype] = (counts[subtype] ?? 0) + 1;
+  }
+  return counts;
+}
+
 /** Lowercased words (letters and digits), with ligatures and full-width forms folded. */
 export function wordsOf(text: string): string[] {
   return (

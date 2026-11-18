@@ -5,6 +5,7 @@ import {
   ApproveBody,
   BulkTransitionBody,
   ContactBody,
+  CoverLetterBody,
   CreateJobRequest,
   CvSaveBody,
   type DuplicateHint,
@@ -193,13 +194,67 @@ export function jobRoutes(router: Router, app: AppContext): void {
     return new Reply(202, app.flow.startCheck(record.id));
   });
 
-  router.get("/api/jobs/:id/cv.pdf", async ({ params, res }) => {
+  router.get("/api/jobs/:id/cv.pdf", async ({ params, url, res }) => {
     const record = requireJob(app, params.id);
     const pdf = await app.flow.cvPdf(record.id);
+    // ?download=1 saves it under a name a recruiter can read: "Alex Example CV - Acme.pdf".
+    const download = url.searchParams.get("download") === "1";
+    const name = download
+      ? app.apply.fileName(record, "CV", (await app.profile.contact()).value?.name ?? null)
+      : `${record.id}.pdf`;
     res.writeHead(200, {
       "content-type": "application/pdf",
       "content-length": pdf.byteLength,
-      "content-disposition": `inline; filename="${record.id}.pdf"`,
+      "content-disposition": `${download ? "attachment" : "inline"}; filename="${name.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "")}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+      "cache-control": "no-store",
+    });
+    res.end(pdf);
+    return HANDLED;
+  });
+
+  // ---------- M4: cover letter ----------
+
+  router.post("/api/jobs/:id/cover-letter", async ({ params, body }) => {
+    const input = await body(CoverLetterBody);
+    const record = requireJob(app, params.id);
+    return new Reply(202, app.flow.startCoverLetter(record.id, input));
+  });
+
+  router.get("/api/jobs/:id/cover-letter", ({ params }) =>
+    app.flow.coverLetterView(requireJob(app, params.id).id),
+  );
+
+  router.put("/api/jobs/:id/cover-letter", async ({ params, body }) => {
+    const { text, expectedSha256 } = await body(CvSaveBody);
+    const record = requireJob(app, params.id);
+    return new Reply(202, await app.flow.saveCoverLetter(record.id, text, expectedSha256));
+  });
+
+  router.post("/api/jobs/:id/cover-letter/check", ({ params }) => {
+    const record = requireJob(app, params.id);
+    return new Reply(202, app.flow.startCoverLetterCheck(record.id));
+  });
+
+  router.post("/api/jobs/:id/cover-letter/approve", async ({ params }) => {
+    const record = requireJob(app, params.id);
+    return toJobDetail(await app.flow.approveCoverLetter(record.id));
+  });
+
+  router.get("/api/jobs/:id/cover-letter.pdf", async ({ params, url, res }) => {
+    const record = requireJob(app, params.id);
+    const pdf = await app.flow.coverLetterPdf(record.id);
+    const download = url.searchParams.get("download") === "1";
+    const name = download
+      ? app.apply.fileName(
+          record,
+          "Cover letter",
+          (await app.profile.contact()).value?.name ?? null,
+        )
+      : `${record.id}-cover-letter.pdf`;
+    res.writeHead(200, {
+      "content-type": "application/pdf",
+      "content-length": pdf.byteLength,
+      "content-disposition": `${download ? "attachment" : "inline"}; filename="${name.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "")}"; filename*=UTF-8''${encodeURIComponent(name)}`,
       "cache-control": "no-store",
     });
     res.end(pdf);

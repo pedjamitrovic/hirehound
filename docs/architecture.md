@@ -20,10 +20,12 @@ src/server/
   jobs/                      job creation, posting snapshot and extraction, transitions (M1);
                              evaluate, tailor, verify tasks and the review/approve flow (M3)
   ai/                        engine adapter (Anthropic API, Claude Code), runTask, prompts/
+  apply/                     assisted-apply browser, form scan, form mapping, application record (M4)
   onboarding/                AI task definitions and the onboarding flow
   profile/                   profile files, experience bank ops, base CVs, imports
   import/                    ZIP, DOCX and LinkedIn export readers (no dependencies)
-  pdf/                       CV HTML document, themes, bundled font, rendering via playwright-core
+  pdf/                       CV HTML document, themes, static Inter (@fontsource/inter), rendering
+                             via playwright-core, PDF text read-back
   tasks.ts                   background tasks with progress over SSE
 src/web/
   main.tsx  app.tsx          bootstrap and screen switch
@@ -100,6 +102,31 @@ task, one per job at a time, and the task runner works on at most three tasks at
 The review screen (`src/web/screens/job/CvTab.tsx`) works from `GET /api/jobs/:id/cv`, which
 returns the CV as rows (sections, claims with diff state, verdicts, check issues, removed base
 claims), the evidence for chips, the render and the list of blockers.
+
+## Apply and cover letter (M4)
+
+`src/server/apply` holds the application flow; Hirehound never submits a form.
+
+- **Manual:** the Application tab lists the steps, offers the approved PDFs under readable names
+  ("Alex Example CV - Acme.pdf") and copy-ready contact details and saved answers. "I submitted"
+  records it.
+- **Assisted:** `ApplyBrowser` (`browser.ts`) runs the installed Chrome or Edge with a persistent
+  profile under the config folder, one tab per job. `page-scan.js` runs in every frame of the page
+  and describes each field by its visible label (radio groups become one field); it is plain
+  JavaScript because the server's TypeScript has no DOM types. The `map-form` task matches the fields
+  to the contact details, preferences, saved answers and approved PDFs. Code then applies guard
+  rails no matter what the model says (`form.ts`: sensitive and consent questions always come back
+  to you) and fills the fields with Playwright, attaching PDFs from memory under readable names and
+  outlining what it filled. CAPTCHAs are detected and left to you. There is no action that clicks
+  a button, so submitting is impossible by construction.
+- **I submitted:** `ApplyService.submitted` writes `application.md` (plus `confirmation.png` from
+  the open page in assisted mode) and then moves the job to applied through `JobService`, which
+  re-checks guard G3 inside the job's lock; if that fails, the files are removed.
+
+The cover letter reuses the CV's pipeline in `JobFlow`: the same `#check` (deterministic checks,
+verifier with reused verdicts, render, ATS read-back) parameterised by document, with the posting
+passed as extra evidence for statements about the company. It has its own files
+(`cover-letter.*`) and its own approval, and does not move the job between states.
 
 ## AI engine adapter
 

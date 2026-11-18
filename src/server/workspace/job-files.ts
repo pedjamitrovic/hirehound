@@ -56,20 +56,45 @@ export const NO_CV_STATE: CvState = {
   pdfSha256: null,
 };
 
-export async function readCvState(
+/** The three files of a checked document: its source, its verification and its PDF. */
+export type DocFiles = { source: string; verification: string; pdf: string };
+
+export const CV_FILES: DocFiles = {
+  source: JOB_FILES.cv,
+  verification: JOB_FILES.verification,
+  pdf: JOB_FILES.cvPdf,
+};
+
+export const COVER_LETTER_FILES: DocFiles = {
+  source: JOB_FILES.coverLetter,
+  verification: JOB_FILES.coverLetterVerification,
+  pdf: JOB_FILES.coverLetterPdf,
+};
+
+export function readCvState(
   root: string,
   id: string,
   diagnostics: Diagnostic[] = [],
 ): Promise<CvState> {
+  return readDocState(root, id, CV_FILES, diagnostics);
+}
+
+/** Verification state of a CV or cover letter (same rules: G1 and the PDF it was checked with). */
+export async function readDocState(
+  root: string,
+  id: string,
+  files: DocFiles,
+  diagnostics: Diagnostic[] = [],
+): Promise<CvState> {
   const dir = jobDir(root, id);
-  const cvText = await readTextFile(join(dir, JOB_FILES.cv));
+  const cvText = await readTextFile(join(dir, files.source));
   if (cvText === null) return NO_CV_STATE;
   const cvSha256 = sha256(cvText);
 
   let verification: VerificationFile | null = null;
-  const json = await readTextFile(join(dir, JOB_FILES.verification));
+  const json = await readTextFile(join(dir, files.verification));
   if (json !== null) {
-    const file = `${JOBS_DIR}/${id}/${JOB_FILES.verification}`;
+    const file = `${JOBS_DIR}/${id}/${files.verification}`;
     try {
       const parsed = VerificationFile.safeParse(JSON.parse(json));
       if (parsed.success) verification = parsed.data;
@@ -97,7 +122,7 @@ export async function readCvState(
   let pdfSha256: string | null = null;
   if (current && verification?.render) {
     try {
-      const pdf = await readFile(join(dir, JOB_FILES.cvPdf));
+      const pdf = await readFile(join(dir, files.pdf));
       const hash = sha256(pdf);
       if (hash === verification.render.pdf_sha256) pdfSha256 = hash;
     } catch (error) {

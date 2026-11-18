@@ -5,6 +5,7 @@ import { type Claim, cvClaims } from "../../shared/cv/claims.ts";
 import { parseCv } from "../../shared/cv/parse.ts";
 import { toYaml } from "../../shared/frontmatter.ts";
 import type { BankFile } from "../../shared/schemas/bank.ts";
+import type { CoverLetterAngle } from "../../shared/schemas/cv.ts";
 import type { EvaluationOutput } from "../../shared/schemas/evaluation.ts";
 import type { PostingFrontmatter } from "../../shared/schemas/posting.ts";
 import type { Preferences } from "../../shared/schemas/preferences.ts";
@@ -46,7 +47,7 @@ export function entryEvidenceText(entry: IndexedEntry, index: Map<string, Indexe
   return lines.join("\n");
 }
 
-function postingText(posting: PostingFrontmatter | null, body: string): string {
+export function postingText(posting: PostingFrontmatter | null, body: string): string {
   const p = posting;
   const facts = p
     ? [
@@ -306,6 +307,102 @@ export const tailorTask: TaskDef<TailorInput, TailorOutput> = {
   },
 };
 
+// ---------- Cover letter ----------
+
+export const ANGLE_BRIEFS: Record<CoverLetterAngle, string> = {
+  fit: "Why I fit: walk through the posting's most important requirements and the evidence that covers each.",
+  impact:
+    "Impact first: open with the strongest measurable results, then tie them to what the role needs.",
+  motivation:
+    "Why this team: what in the posting draws the candidate (only what the posting says), then the evidence that they would do the work well.",
+  brief: "A short note: three short paragraphs, no more than about 180 words.",
+};
+
+export const CoverLetterOutput = z.object({
+  greeting: Text,
+  /** Plain paragraphs in the CV dialect, each ending with its evidence marker. */
+  body: Text,
+  closing: Text,
+  notes: z.string(),
+});
+export type CoverLetterOutput = z.infer<typeof CoverLetterOutput>;
+
+export type CoverLetterInput = {
+  posting: PostingFrontmatter | null;
+  postingBody: string;
+  evaluation: EvaluationOutput | null;
+  /** The tailored CV body when there is one: the letter should agree with it. */
+  cv: string | null;
+  bank: BankFile;
+  angle: CoverLetterAngle;
+  name: string | null;
+  feedback?: { text: string; current: string } | undefined;
+};
+
+/** Problems with a cover letter body: format (paragraphs only) and the deterministic checks. */
+export function coverLetterProblems(body: string, bank: BankFile, posting: string): string[] {
+  const problems: string[] = [];
+  const { doc, issues } = parseCv(body);
+  for (const issue of issues) {
+    if (issue.severity === "error") problems.push(`line ${issue.line}: ${issue.message}`);
+  }
+  for (const block of doc.blocks) {
+    if (block.t === "section" || block.t === "entry" || block.t === "list") {
+      const line = block.t === "list" ? (block.items[0]?.line ?? 1) : block.line;
+      problems.push(
+        `line ${line}: a cover letter is plain paragraphs, without headings or bullets`,
+      );
+    }
+  }
+  const paragraphs = cvClaims(doc).length;
+  if (paragraphs < 2 || paragraphs > 6) {
+    problems.push(`write 2 to 6 paragraphs (got ${paragraphs})`);
+  }
+  for (const issue of checkTailoredCv(doc, bank, { context: posting }).issues) {
+    if (issue.severity === "error") problems.push(`line ${issue.line}: ${issue.message}`);
+  }
+  return problems;
+}
+
+export const coverLetterTask: TaskDef<CoverLetterInput, CoverLetterOutput> = {
+  name: "cover-letter",
+  schema: CoverLetterOutput,
+  effort: "high",
+  lenient: true,
+  render: (input) => ({
+    input: [
+      "## Job posting",
+      postingText(input.posting, input.postingBody),
+      "",
+      "## Requirements from the evaluation",
+      requirementsText(input.evaluation),
+      "",
+      `## Angle: ${ANGLE_BRIEFS[input.angle]}`,
+      input.name ? `Candidate: ${input.name}` : "",
+      "",
+      "## The tailored CV (the letter must agree with it)",
+      input.cv?.trim() || "(no tailored CV yet)",
+      "",
+      "## Confirmed experience bank (cite only these ids)",
+      bankToPromptText(input.bank, { confirmedOnly: true }),
+      ...(input.feedback
+        ? [
+            "",
+            "## Current cover letter",
+            input.feedback.current.trim(),
+            "",
+            "## Requested changes (from the candidate)",
+            input.feedback.text.trim(),
+            "",
+            "Revise the current cover letter as requested, within the rules.",
+          ]
+        : ["", "Write the cover letter now."]),
+    ].join("\n"),
+  }),
+  postCheck: (output, input) =>
+    coverLetterProblems(output.body, input.bank, postingText(input.posting, input.postingBody)),
+};
+
 // ---------- Verify ----------
 
 export const VerifyOutput = z.object({
@@ -324,6 +421,8 @@ export type VerifyInput = {
   claims: Claim[];
   /** Evidence text per cited id (entryEvidenceText). */
   evidence: Map<string, string>;
+  /** For a cover letter: the posting, which statements about the company or role may rest on. */
+  posting?: string | undefined;
 };
 
 export const verifyTask: TaskDef<VerifyInput, VerifyOutput> = {
@@ -336,6 +435,15 @@ export const verifyTask: TaskDef<VerifyInput, VerifyOutput> = {
       input: [
         "## Cited experience-bank entries",
         ...ids.map((id) => input.evidence.get(id) ?? `${id}: (not in the bank)`),
+        ...(input.posting
+          ? [
+              "",
+              "## The job posting",
+              "These claims are from a cover letter. Statements about the company or the role may rest on this posting; statements about the candidate still need the cited entries.",
+              "",
+              input.posting.trim(),
+            ]
+          : []),
         "",
         "## Claims",
         ...input.claims.map(

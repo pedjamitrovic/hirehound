@@ -49,8 +49,9 @@ Run against a throwaway workspace while developing: `node bin/hirehound.ts --wor
 - The experience bank (`profile/experience-bank.yaml`) is edited only through `applyBankOps` /
   `appendEntries` (`src/server/profile/bank-ops.ts`): ids are allocated there and never reused.
 - PDFs: `src/server/pdf` renders the CV HTML with the installed Chrome or Edge via
-  `playwright-core` (no browser download). Themes are CSS in `src/server/pdf/themes`; the Inter
-  font (SIL OFL) is bundled in `src/server/pdf/fonts`.
+  `playwright-core` (no browser download). Themes are CSS in `src/server/pdf/themes`; the font is
+  static Inter from `@fontsource/inter` (SIL OFL), inlined into each document. Use static fonts
+  only: Chrome embeds variable fonts as Type3 glyphs, which ATS read poorly.
 
 ## TypeScript rules (native type stripping)
 
@@ -63,8 +64,9 @@ Run against a throwaway workspace while developing: `node bin/hirehound.ts --wor
 
 ## Dependencies
 
-Runtime dependencies are limited to `preact`, `@preact/signals`, `zod`, `yaml` and
-`playwright-core`. Dev dependencies: `typescript`, `vite`, `@biomejs/biome`, `@types/node`.
+Runtime dependencies are limited to `preact`, `@preact/signals`, `zod`, `yaml`, `playwright-core`
+and `@fontsource/inter` (font files only, no code; added in M4 at the maintainer's request). Dev
+dependencies: `typescript`, `vite`, `@biomejs/biome`, `@types/node`.
 **Ask the maintainer before adding any other dependency**, with a justification. Prefer Node
 built-ins and the web platform.
 

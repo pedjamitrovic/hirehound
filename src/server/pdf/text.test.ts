@@ -4,7 +4,7 @@ import { parseCv } from "../../shared/cv/parse.ts";
 import { cvPlainText } from "../../shared/cv/render.ts";
 import { cvDocumentHtml, themeCss } from "./document.ts";
 import { PdfError, PdfRenderer } from "./render.ts";
-import { extractPdfText, parseCMap, textCoverage, wordsOf } from "./text.ts";
+import { extractPdfText, parseCMap, pdfFontTypes, textCoverage, wordsOf } from "./text.ts";
 
 describe("parseCMap", () => {
   it("reads one-byte and two-byte maps, ranges and arrays", () => {
@@ -90,6 +90,9 @@ describe("Chrome PDF round trip", () => {
     }
     const text = extractPdfText(pdf);
     assert.match(text, /2021-03 - present/);
+    // Static fonts embed as real fonts; a variable font would come out as Type3 glyphs.
+    assert.equal(pdfFontTypes(pdf).Type3, undefined);
+    assert.ok((pdfFontTypes(pdf).Type0 ?? 0) > 0);
     const result = textCoverage(`Alex Example\nEngineering Manager\n${cvPlainText(doc)}`, text);
     assert.deepEqual(result, { coverage: 1, missing: [], garbled: 0 });
   });
