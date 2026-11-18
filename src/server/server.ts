@@ -7,6 +7,9 @@ import { checkRequest } from "./http/guard.ts";
 import { HttpError, Router, sendError } from "./http/router.ts";
 import { SseHub } from "./http/sse.ts";
 import { serveStatic } from "./http/static.ts";
+import { JobService } from "./jobs/service.ts";
+import { fetchPosting, SnapshotCache } from "./jobs/snapshot.ts";
+import { openExternal } from "./open.ts";
 import { registerRoutes } from "./routes/index.ts";
 import { errorCode } from "./workspace/fsx.ts";
 import { WorkspaceIndex } from "./workspace/index.ts";
@@ -24,6 +27,9 @@ export type ServerOptions = {
   dev?: boolean;
   log?: (message: string) => void;
   watch?: WatchOptions;
+  /** Test seams: no network, no file manager windows. */
+  fetchPosting?: AppContext["fetchPosting"];
+  openFolder?: AppContext["openFolder"];
 };
 
 export type RunningServer = {
@@ -66,7 +72,17 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   await index.load();
   const hub = new SseHub();
   index.subscribe((event) => hub.broadcast(event));
-  const context: AppContext = { root: options.workspace, index, hub, log };
+  const root = options.workspace;
+  const context: AppContext = {
+    root,
+    index,
+    hub,
+    jobs: new JobService({ root, index }),
+    snapshots: new SnapshotCache(),
+    fetchPosting: options.fetchPosting ?? ((url) => fetchPosting(url)),
+    openFolder: options.openFolder ?? openExternal,
+    log,
+  };
 
   const watcher = watchWorkspace(
     options.workspace,

@@ -40,6 +40,8 @@ export type JobSummary = {
   noteCount: number;
   errors: number;
   warnings: number;
+  /** Moves offered from the current state, including blocked ones with the reason. */
+  transitions: TransitionOption[];
 };
 
 export type JobDetail = {

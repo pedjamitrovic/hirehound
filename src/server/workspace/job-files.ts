@@ -5,6 +5,7 @@ import type { Diagnostic, JobSummary } from "../../shared/schemas/api.ts";
 import { JOB_ID_PATTERN } from "../../shared/schemas/common.ts";
 import { PostingFrontmatter } from "../../shared/schemas/posting.ts";
 import { StatusFile } from "../../shared/schemas/status.ts";
+import { type GuardContext, NO_CV, transitionOptions } from "../../shared/states.ts";
 import { isNotFound, isTempFile, readTextFile } from "./fsx.ts";
 import { JOB_FILES, JOBS_DIR, jobDir } from "./layout.ts";
 import { parseYaml } from "./yamlfile.ts";
@@ -22,6 +23,14 @@ export type JobRecord = {
   /** Cheap change detector for polling mode: mtimes and names of the folder's files. */
   signature: string;
 };
+
+/**
+ * Guard facts derived from the job's files. M3 reads verification.json and hashes cv.pdf here;
+ * until tailoring exists, no job has a verified CV or a rendered PDF.
+ */
+export function guardContextFor(_root: string, _id: string): GuardContext {
+  return NO_CV;
+}
 
 export function isJobId(name: string): boolean {
   return JOB_ID_PATTERN.test(name);
@@ -168,6 +177,7 @@ export async function readJob(root: string, id: string): Promise<JobRecord | nul
     noteCount: status?.notes.length ?? 0,
     errors: diagnostics.filter((d) => d.severity === "error").length,
     warnings: diagnostics.filter((d) => d.severity === "warning").length,
+    transitions: status ? transitionOptions(status, guardContextFor(root, id)) : [],
   };
 
   return {

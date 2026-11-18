@@ -155,7 +155,7 @@ YAML frontmatter plus the posting as readable text (headings as `##`, bullets as
 | `company`, `title` | string | required |
 | `url` | http(s) URL | absent for pasted text without a link |
 | `source` | `manual-url`, `manual-text`, `greenhouse`, `lever`, `ashby`, `workable`, `smartrecruiters`, `linkedin-email`, `browser` | |
-| `source_ref` | string | ATS job id, dedupe key (M5) |
+| `source_ref` | string | provider-scoped id, e.g. `greenhouse:acme:4012345`; set when the link is a known ATS; dedupe key |
 | `location` | string | optional |
 | `workplace` | `remote`, `hybrid`, `onsite`, `unknown` | default `unknown` |
 | `employment_type` | `full-time`, `part-time`, `contract`, `internship`, `unknown` | default `unknown` |

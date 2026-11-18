@@ -120,15 +120,15 @@ export function useHotkeys(hotkeys: Hotkey[]): void {
 export function keyLabels(keys: string): string[][] {
   const mac = /Mac|iPhone|iPad/.test(navigator.platform);
   const names: Record<string, string> = {
-    mod: mac ? "⌘" : "Ctrl",
+    mod: mac ? "\u2318" : "Ctrl",
     shift: "Shift",
-    alt: mac ? "⌥" : "Alt",
+    alt: mac ? "\u2325" : "Alt",
     enter: "Enter",
     escape: "Esc",
-    arrowup: "↑",
-    arrowdown: "↓",
-    arrowleft: "←",
-    arrowright: "→",
+    arrowup: "\u2191",
+    arrowdown: "\u2193",
+    arrowleft: "\u2190",
+    arrowright: "\u2192",
     space: "Space",
   };
   return keys

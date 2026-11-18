@@ -2,7 +2,7 @@
 
 🐕 Hirehound: a local-first web app that sniffs out the right jobs and tailors your CV for each one, using only what you've actually done. Every claim is linked to your real experience, you approve every application, and you always press Submit. Powered by Claude.
 
-> **Status: early development.** Milestones M0 (foundation) and M1 (manual job tracking) are in progress. Tailoring, verification and applying arrive in M2 to M4. See [the PRD](docs/PRD.md) for the full plan.
+> **Status: early development.** M0 (foundation) and M1 (adding jobs by link or text, Kanban and table pipeline, job dossier) work today. AI evaluation, tailoring, verification and applying arrive in M2 to M4. See [the PRD](docs/PRD.md) for the full plan.
 
 ## Why
 

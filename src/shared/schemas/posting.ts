@@ -1,26 +1,10 @@
 import { z } from "zod";
+import { EMPLOYMENT_TYPES, POSTING_SOURCES, WORKPLACES } from "../enums.ts";
 import { IsoDate, IsoDateTime, SalaryRange, Sha256, Version } from "./common.ts";
 
-export const PostingSource = z.enum([
-  "manual-url",
-  "manual-text",
-  "greenhouse",
-  "lever",
-  "ashby",
-  "workable",
-  "smartrecruiters",
-  "linkedin-email",
-  "browser",
-]);
-
-export const Workplace = z.enum(["remote", "hybrid", "onsite", "unknown"]);
-export const EmploymentType = z.enum([
-  "full-time",
-  "part-time",
-  "contract",
-  "internship",
-  "unknown",
-]);
+export const PostingSource = z.enum(POSTING_SOURCES);
+export const Workplace = z.enum(WORKPLACES);
+export const EmploymentType = z.enum(EMPLOYMENT_TYPES);
 
 /** Frontmatter of jobs/<id>/posting.md. The body is the posting as readable text. */
 export const PostingFrontmatter = z.object({

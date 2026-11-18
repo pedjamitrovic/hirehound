@@ -1,17 +1,21 @@
 import { signal } from "@preact/signals";
 import type { ComponentChildren } from "preact";
 import { useEffect } from "preact/hooks";
+import { AddJobDialog } from "./components/AddJobDialog.tsx";
 import { Icon } from "./components/Icon.tsx";
+import { MoveDialog } from "./components/MoveDialog.tsx";
 import { Sidebar, TopBar } from "./components/Shell.tsx";
 import { ShortcutSheet } from "./components/ShortcutSheet.tsx";
 import { Toasts } from "./components/Toasts.tsx";
 import { EmptyState } from "./components/ui.tsx";
 import { useHotkeys } from "./hotkeys.ts";
 import { navigate, type Route, route } from "./router.ts";
+import { JobScreen } from "./screens/Job.tsx";
 import { PipelineScreen } from "./screens/Pipeline.tsx";
 import { Placeholder } from "./screens/Placeholder.tsx";
 import { SettingsScreen } from "./screens/Settings.tsx";
 import { TodayScreen } from "./screens/Today.tsx";
+import { addJobOpen, moveRequest } from "./state/actions.ts";
 import { loadError, loaded, refresh, startSync } from "./state/store.ts";
 
 export const helpOpen = signal(false);
@@ -72,15 +76,7 @@ function Screen(props: { route: Route } & ScreenProps) {
         />
       );
     case "job":
-      return (
-        <Placeholder
-          frame={props.frame}
-          title="Job"
-          icon="pipeline"
-          milestone="M1"
-          text="The job dossier arrives with M1."
-        />
-      );
+      return <JobScreen key={r.id} frame={props.frame} id={r.id} tab={r.tab} />;
     case "not-found":
       return (
         <>
@@ -113,6 +109,14 @@ export function App() {
       description: "Show keyboard shortcuts",
       run: () => {
         helpOpen.value = true;
+      },
+    },
+    {
+      keys: "n",
+      group: "General",
+      description: "Add a job",
+      run: () => {
+        addJobOpen.value = true;
       },
     },
     { keys: "g t", group: "Go to", description: "Today", run: () => navigate("/") },
@@ -173,6 +177,21 @@ export function App() {
         <ShortcutSheet
           onClose={() => {
             helpOpen.value = false;
+          }}
+        />
+      ) : null}
+      {addJobOpen.value ? (
+        <AddJobDialog
+          onClose={() => {
+            addJobOpen.value = false;
+          }}
+        />
+      ) : null}
+      {moveRequest.value ? (
+        <MoveDialog
+          request={moveRequest.value}
+          onClose={() => {
+            moveRequest.value = null;
           }}
         />
       ) : null}

@@ -12,7 +12,7 @@ const FENCE = /^---[ \t]*\n(?:([\s\S]*?)\n)?---[ \t]*(?:\n|$)/;
 
 /** Normalises CRLF and a leading BOM so every parser sees LF-only text. */
 export function normalizeText(text: string): string {
-  return text.replace(/^﻿/, "").replace(/\r\n?/g, "\n");
+  return text.replace(/^\ufeff/, "").replace(/\r\n?/g, "\n");
 }
 
 export function splitFrontmatter(text: string): FrontmatterSplit {
