@@ -58,12 +58,6 @@ function Section(props: {
   );
 }
 
-const PROFILE_LABELS: Record<"contact" | "preferences" | "answers", string> = {
-  contact: "Contact details",
-  preferences: "Preferences",
-  answers: "Saved answers",
-};
-
 function stateText(state: ProfileFileState): string {
   return state === "ok" ? "Done" : state === "missing" ? "Not set up" : "Has errors";
 }
@@ -71,43 +65,65 @@ function stateText(state: ProfileFileState): string {
 function ProfileSetup() {
   const info = workspace.value;
   if (!info) return null;
-  const files = (["contact", "preferences", "answers"] as const).map((key) => ({
-    key,
-    state: info.profile[key],
-  }));
-  if (files.every((f) => f.state === "ok") && info.profile.bases.length > 0) return null;
+  const { bank, bases } = info.profile;
+  const items: { label: string; done: boolean; detail: string; href: string }[] = [
+    {
+      label: "Experience bank",
+      done: bank.entries > 0 && bank.confirmed === bank.entries,
+      detail:
+        bank.entries === 0
+          ? "Not started"
+          : bank.confirmed === bank.entries
+            ? `${bank.entries} entries, all confirmed`
+            : `${bank.entries - bank.confirmed} of ${bank.entries} to review`,
+      href: "/profile/experience",
+    },
+    {
+      label: "Base CVs",
+      done: bases.length >= 1,
+      detail: bases.length ? `${bases.length} written` : "None yet",
+      href: "/profile/bases",
+    },
+    {
+      label: "Contact details",
+      done: info.profile.contact === "ok",
+      detail: stateText(info.profile.contact),
+      href: "/profile/contact",
+    },
+    {
+      label: "Preferences",
+      done: info.profile.preferences === "ok",
+      detail: stateText(info.profile.preferences),
+      href: "/profile/preferences",
+    },
+  ];
+  if (items.every((i) => i.done)) return null;
   return (
-    <Section title="Set up your profile">
+    <Section
+      title="Set up your profile"
+      action={
+        <Link class="btn primary small" href="/onboarding">
+          {bank.entries === 0 ? "Start onboarding" : "Continue onboarding"}
+        </Link>
+      }
+    >
       <div class="card-body" style={{ display: "grid", gap: "8px" }}>
         <p class="secondary">
-          The onboarding wizard arrives in M2. Until then you can fill in these files in your
-          workspace; changes show up here instantly.
+          Import your existing CVs and Claude drafts your experience bank: the facts every CV is
+          built from. You review everything before it is used.
         </p>
         <ul class="list">
-          {files.map((f) => (
-            <li key={f.key} class="list-row" style={{ paddingInline: 0 }}>
-              <Icon name={f.state === "ok" ? "check" : "info"} size={14} />
-              <span>{PROFILE_LABELS[f.key]}</span>
-              <code class="muted">profile/{f.key}.yaml</code>
-              <span class="meta">
-                <span
-                  class={`badge ${f.state === "ok" ? "success" : f.state === "invalid" ? "danger" : ""}`}
-                >
-                  {stateText(f.state)}
+          {items.map((item) => (
+            <li key={item.label}>
+              <Link class="list-row" href={item.href} style={{ paddingInline: 0 }}>
+                <Icon name={item.done ? "check" : "info"} size={14} />
+                <span>{item.label}</span>
+                <span class="meta">
+                  <span class={`badge ${item.done ? "success" : ""}`}>{item.detail}</span>
                 </span>
-              </span>
+              </Link>
             </li>
           ))}
-          <li class="list-row" style={{ paddingInline: 0 }}>
-            <Icon name={info.profile.bases.length ? "check" : "info"} size={14} />
-            <span>Base CVs</span>
-            <code class="muted">profile/bases/*.md</code>
-            <span class="meta">
-              <span class={`badge ${info.profile.bases.length ? "success" : ""}`}>
-                {info.profile.bases.length ? `${info.profile.bases.length} found` : "M2"}
-              </span>
-            </span>
-          </li>
         </ul>
       </div>
     </Section>

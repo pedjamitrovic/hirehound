@@ -19,11 +19,22 @@ export const JOB_TABS: readonly TabId[] = [
   "timeline",
 ];
 
+export type ProfileTab = "experience" | "bases" | "contact" | "preferences" | "answers";
+
+export const PROFILE_TABS: readonly ProfileTab[] = [
+  "experience",
+  "bases",
+  "contact",
+  "preferences",
+  "answers",
+];
+
 export type Route =
   | { name: "today" }
   | { name: "pipeline" }
   | { name: "job"; id: string; tab: TabId }
-  | { name: "profile" }
+  | { name: "profile"; tab: ProfileTab; baseId: string | null }
+  | { name: "onboarding" }
   | { name: "sources" }
   | { name: "insights" }
   | { name: "settings" }
@@ -51,10 +62,16 @@ export function parseRoute(pathname: string): Route {
     if (third && !JOB_TABS.includes(third as TabId)) return { name: "not-found", path: pathname };
     return { name: "job", id: second, tab };
   }
+  if (first === "profile" && parts.length <= 3) {
+    if (!second) return { name: "profile", tab: "experience", baseId: null };
+    const tab = PROFILE_TABS.find((t) => t === second);
+    if (!tab || (third && tab !== "bases")) return { name: "not-found", path: pathname };
+    return { name: "profile", tab, baseId: third ?? null };
+  }
+  if (first === "onboarding" && parts.length === 1) return { name: "onboarding" };
   if (parts.length === 1) {
     switch (first) {
       case "pipeline":
-      case "profile":
       case "sources":
       case "insights":
       case "settings":

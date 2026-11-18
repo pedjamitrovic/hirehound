@@ -1,0 +1,246 @@
+/* ---------- Profile forms and settings cards ---------- */
+
+.form-stack {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.form-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.form-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+fieldset.fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+
+  & > legend {
+    padding: 0;
+    margin-bottom: 4px;
+  }
+}
+
+.check-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.check-stack {
+  gap: var(--space-2);
+}
+
+.check {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: fit-content;
+  color: var(--text);
+  cursor: pointer;
+
+  & input {
+    margin: 2px 0 0;
+    accent-color: var(--accent);
+  }
+
+  & .hint {
+    display: block;
+    font-size: var(--text-xs);
+    color: var(--text-3);
+  }
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.inline-form {
+  display: flex;
+  gap: var(--space-2);
+
+  & .input {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* Stays in view at the bottom of the scroll area while a long form is edited. */
+.form-savebar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  background: var(--surface);
+
+  &.standalone {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+  }
+}
+
+.form-savebar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+
+  & .spacer {
+    flex: 1;
+  }
+}
+
+.form-status {
+  font-size: var(--text-sm);
+  color: var(--text-3);
+}
+
+.form-diagnostics {
+  display: grid;
+  gap: 2px;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notice.success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+/* ---------- Contact ---------- */
+
+.link-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 10rem) minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+
+  & .error {
+    grid-column: 1 / -1;
+    font-size: var(--text-xs);
+    color: var(--danger);
+  }
+}
+
+.suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.suggestion-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text);
+}
+
+.suggestion-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* ---------- Saved answers ---------- */
+
+.answer-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.answer-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.answer-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: start;
+
+  & > .btn {
+    margin-top: 20px;
+  }
+}
+
+.textarea.answer-text {
+  min-height: 56px;
+}
+
+.answer-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.answer-foot {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+
+  & details {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.answer-id {
+  padding-top: 2px;
+  font-size: var(--text-xs);
+  color: var(--text-3);
+}
+
+details.disclosure {
+  & > summary {
+    width: fit-content;
+    font-size: var(--text-sm);
+    color: var(--text-2);
+    cursor: pointer;
+
+    & .error {
+      font-size: var(--text-xs);
+      color: var(--danger);
+    }
+  }
+
+  &[open] > summary {
+    margin-bottom: var(--space-2);
+  }
+}

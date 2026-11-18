@@ -1,9 +1,9 @@
 import type { Diagnostic } from "../../shared/schemas/api.ts";
 import type { ScreenProps } from "../app.tsx";
 import { Icon } from "../components/Icon.tsx";
-import { Notice } from "../components/ui.tsx";
 import { workspace } from "../state/store.ts";
 import { type Theme, theme } from "../state/theme.ts";
+import { AiSettingsCard, PdfStatusCard } from "./settings/AiSettingsCard.tsx";
 
 export function DiagnosticList(props: { items: Diagnostic[] }) {
   return (
@@ -114,18 +114,8 @@ export function SettingsScreen(props: ScreenProps) {
             </div>
           </section>
 
-          <section class="card">
-            <header class="card-header">
-              <h2>AI engine</h2>
-            </header>
-            <div class="card-body">
-              <Notice>
-                Choosing between the Anthropic API (API key) and your Claude Code login arrives in
-                M2, together with evaluation and tailoring. Your API key will never be stored in the
-                workspace.
-              </Notice>
-            </div>
-          </section>
+          <AiSettingsCard />
+          <PdfStatusCard />
         </div>
       </div>
     </>

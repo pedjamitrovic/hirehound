@@ -4,6 +4,7 @@ import { addJobOpen } from "../state/actions.ts";
 import { activeJobs, connection, jobList, workspace } from "../state/store.ts";
 import { Icon, type IconName } from "./Icon.tsx";
 import { Search } from "./Search.tsx";
+import { TaskIndicator } from "./TaskStatus.tsx";
 import { Link } from "./ui.tsx";
 
 type NavEntry = { href: string; label: string; icon: IconName; match: string[] };
@@ -11,7 +12,7 @@ type NavEntry = { href: string; label: string; icon: IconName; match: string[] }
 const NAV: NavEntry[] = [
   { href: "/", label: "Today", icon: "today", match: ["today"] },
   { href: "/pipeline", label: "Pipeline", icon: "pipeline", match: ["pipeline", "job"] },
-  { href: "/profile", label: "Profile", icon: "profile", match: ["profile"] },
+  { href: "/profile", label: "Profile", icon: "profile", match: ["profile", "onboarding"] },
   { href: "/sources", label: "Sources", icon: "sources", match: ["sources"] },
   { href: "/insights", label: "Insights", icon: "insights", match: ["insights"] },
 ];
@@ -90,6 +91,7 @@ export function TopBar(props: {
     <header class="topbar">
       <div class="topbar-title">{props.title}</div>
       <div class="topbar-actions">
+        <TaskIndicator />
         <Search />
         {props.actions}
         <button
