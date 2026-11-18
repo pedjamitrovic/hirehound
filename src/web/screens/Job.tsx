@@ -21,6 +21,7 @@ import { JOB_TABS, jobPath, navigate, type TabId } from "../router.ts";
 import { openMove } from "../state/actions.ts";
 import { jobRevisions, upsertJob } from "../state/store.ts";
 import { toast } from "../state/toasts.ts";
+import { ApplicationTab } from "./job/ApplicationTab.tsx";
 import { CvTab } from "./job/CvTab.tsx";
 import { EvaluationTab } from "./job/EvaluationTab.tsx";
 import { DiagnosticList } from "./Settings.tsx";
@@ -40,10 +41,6 @@ const LATER: Partial<Record<TabId, { milestone: string; text: string }>> = {
     milestone: "M4",
     text: "An optional cover letter with its own approval, following your cover letter policy, next to the application.",
   },
-  application: {
-    milestone: "M4",
-    text: "A checklist or assisted form filling that always stops before Submit, plus the answers used.",
-  },
   interview: {
     milestone: "M6",
     text: "Likely questions, matching stories, the exact CV you sent and a place for debrief notes.",
@@ -51,6 +48,9 @@ const LATER: Partial<Record<TabId, { milestone: string; text: string }>> = {
 };
 
 const RECOMMENDATION = { apply: "Apply", stretch: "Stretch", skip: "Skip" } as const;
+
+/** Tabs that need the full width; the notes and contacts panel steps aside for them. */
+const WIDE_TABS: readonly TabId[] = ["cv", "application", "cover-letter"];
 
 const ROLE_LABELS: Record<PersonRole, string> = {
   recruiter: "Recruiter",
@@ -570,7 +570,7 @@ export function JobScreen(props: ScreenProps & { id: string; tab: TabId }) {
             </Link>
           ))}
         </nav>
-        <div class={`job-body${tab === "cv" ? " wide" : ""}`}>
+        <div class={`job-body${WIDE_TABS.includes(tab) ? " wide" : ""}`}>
           <div class="job-main">
             {detail.diagnostics.length ? (
               <Notice kind={summary.errors ? "danger" : "warning"}>
@@ -581,6 +581,7 @@ export function JobScreen(props: ScreenProps & { id: string; tab: TabId }) {
             {tab === "posting" ? <PostingTab detail={detail} /> : null}
             {tab === "evaluation" ? <EvaluationTab detail={detail} /> : null}
             {tab === "cv" ? <CvTab detail={detail} onChange={onChange} /> : null}
+            {tab === "application" ? <ApplicationTab detail={detail} onChange={onChange} /> : null}
             {tab === "timeline" ? <TimelineTab detail={detail} /> : null}
             {later ? (
               <EmptyState icon="info" title={`${TAB_LABELS[tab]} arrives in ${later.milestone}`}>
@@ -588,7 +589,7 @@ export function JobScreen(props: ScreenProps & { id: string; tab: TabId }) {
               </EmptyState>
             ) : null}
           </div>
-          {tab === "cv" ? null : (
+          {WIDE_TABS.includes(tab) ? null : (
             <aside class="job-side">
               <Notes detail={detail} onChange={onChange} inputRef={noteInput} />
               <Contacts detail={detail} onChange={onChange} />
