@@ -1,9 +1,12 @@
 // HTTP API contract shared by server and web. Requests are Zod schemas (validated on the
 // server); responses are plain types. API JSON uses camelCase; workspace files use snake_case.
 import { z } from "zod";
+import type { CheckId, CheckIssue } from "../cv/checks.ts";
+import type { Inline } from "../cv/types.ts";
+import type { ScoreResult } from "../score.ts";
 import type { TransitionOption } from "../states.ts";
-import { JobId, type SalaryRange } from "./common.ts";
-import type { ScoreBand } from "./evaluation.ts";
+import { BaseId, JobId, type SalaryRange } from "./common.ts";
+import type { EvaluationFrontmatter, ScoreBand } from "./evaluation.ts";
 import {
   EmploymentType,
   type PostingFrontmatter,
@@ -11,6 +14,7 @@ import {
   Workplace,
 } from "./posting.ts";
 import { JobState, Person, type StatusFile } from "./status.ts";
+import type { ClaimVerdict, RenderInfo } from "./verification.ts";
 
 export type Diagnostic = {
   /** Workspace-relative path with forward slashes. */
@@ -32,6 +36,8 @@ export type JobSummary = {
   salary: SalaryRange | null;
   score: number | null;
   band: ScoreBand | null;
+  /** The evaluation's verdict (block G). */
+  recommendation: "apply" | "stretch" | "skip" | null;
   base: string | null;
   tags: string[];
   addedAt: string;
@@ -53,6 +59,95 @@ export type JobDetail = {
   diagnostics: Diagnostic[];
   transitions: TransitionOption[];
   hasRawHtml: boolean;
+  usage: JobUsage;
+};
+
+/** AI work on one job so far, from its ai-log.jsonl. */
+export type JobUsage = {
+  tasks: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number | null;
+};
+
+/** A bank entry as the review shows it behind an evidence chip. */
+export type EvidenceInfo = {
+  id: string;
+  kind: string | null;
+  label: string;
+  confirmed: boolean;
+  /** Every field, as the verifier saw it. */
+  detail: string;
+};
+
+export type EvaluationView = {
+  evaluation: EvaluationFrontmatter | null;
+  score: ScoreResult | null;
+  /** The posting or the experience bank changed after the evaluation was written. */
+  stale: { posting: boolean; bank: boolean };
+  threshold: number;
+  evidence: Record<string, EvidenceInfo>;
+  /** Base CVs to tailor from. */
+  bases: { id: string; label: string }[];
+};
+
+export type ClaimView = {
+  n: number;
+  kind: "entry" | "paragraph" | "bullet";
+  inline: Inline[];
+  text: string;
+  ev: string[];
+  line: number;
+  diff: "same" | "changed" | "added";
+  /** The base CV's version of a changed claim. */
+  baseText?: string;
+  /** null while this exact claim has not been verified. */
+  verdict: ClaimVerdict | null;
+  reason?: string;
+  suggestion?: string;
+  /** Checks that failed for this claim. */
+  issues: CheckIssue[];
+};
+
+export type CvRow =
+  | { t: "section"; text: string; line: number }
+  | { t: "claim"; claim: ClaimView }
+  | { t: "removed"; text: string; ev: string[] };
+
+export type CvView = {
+  text: string;
+  sha256: string;
+  /** Format problems: the dialect parser and the frontmatter. */
+  issues: CvIssue[];
+  base: { id: string; label: string; changedSinceTailoring: boolean } | null;
+  headline: string | null;
+  theme: "classic" | "modern";
+  generatedAt: string | null;
+  notes: string | null;
+  rows: CvRow[];
+  /** Deterministic checks of the current text; null until checked. */
+  checks: { issues: CheckIssue[]; errors: Record<CheckId, number> } | null;
+  verification: {
+    state: "none" | "stale" | "current";
+    checkedAt: string | null;
+    supported: number;
+    weakened: number;
+    unsupported: number;
+    unverified: number;
+  };
+  render: (RenderInfo & { current: boolean }) | null;
+  evidence: Record<string, EvidenceInfo>;
+  /** Ids whose bank content changed after the CV was verified. */
+  bankChanged: string[];
+  approve: {
+    allowed: boolean;
+    /** Why Approve is blocked, in order. */
+    blockers: string[];
+    /** Score below the threshold: approving needs a reason. */
+    needsOverride: boolean;
+    score: number | null;
+    threshold: number;
+  };
 };
 
 export type ProfileFileState = "ok" | "missing" | "invalid";
@@ -95,6 +190,8 @@ export type TaskInfo = {
   id: string;
   kind: string;
   label: string;
+  /** The job this task works on, if any. One task per job runs at a time. */
+  jobId?: string;
   state: "running" | "done" | "failed";
   startedAt: string;
   finishedAt?: string;
@@ -221,6 +318,30 @@ export type BulkTransitionResult = { results: { id: string; ok: boolean; message
 export const NoteBody = z.object({ text: z.string().trim().min(1, "Note is empty").max(10_000) });
 
 export const ContactBody = Person;
+
+export const TailorBody = z.object({
+  /** Base CV to tailor from; defaults to the evaluation's choice. */
+  base: BaseId.optional(),
+  /** "Request changes": what should be different. Revises the current tailored CV. */
+  feedback: z.string().trim().min(1, "Say what should change").max(4000).optional(),
+});
+
+export const CvSaveBody = z.object({
+  text: z.string().max(200_000),
+  expectedSha256: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/)
+    .nullable(),
+});
+
+export const ApproveBody = z.object({
+  /** Required when the fit score is below the threshold. */
+  overrideReason: z.string().trim().max(2000).optional(),
+});
+
+export type TailorBody = z.input<typeof TailorBody>;
+export type CvSaveBody = z.input<typeof CvSaveBody>;
+export type ApproveBody = z.input<typeof ApproveBody>;
 
 export type CreateJobRequest = z.input<typeof CreateJobRequest>;
 export type TransitionBody = z.input<typeof TransitionBody>;

@@ -1,11 +1,16 @@
-import { readdir, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { splitFrontmatter } from "../../shared/frontmatter.ts";
-import type { Diagnostic, JobSummary } from "../../shared/schemas/api.ts";
+import type { Diagnostic, JobSummary, JobUsage } from "../../shared/schemas/api.ts";
 import { JOB_ID_PATTERN } from "../../shared/schemas/common.ts";
+import { EvaluationFrontmatter } from "../../shared/schemas/evaluation.ts";
 import { PostingFrontmatter } from "../../shared/schemas/posting.ts";
 import { StatusFile } from "../../shared/schemas/status.ts";
-import { type GuardContext, NO_CV, transitionOptions } from "../../shared/states.ts";
+import { VerificationFile } from "../../shared/schemas/verification.ts";
+import { computeScore } from "../../shared/score.ts";
+import { type GuardContext, transitionOptions } from "../../shared/states.ts";
+import { formatPath } from "../../shared/validate.ts";
 import { isNotFound, isTempFile, readTextFile } from "./fsx.ts";
 import { JOB_FILES, JOBS_DIR, jobDir } from "./layout.ts";
 import { parseYaml } from "./yamlfile.ts";
@@ -16,6 +21,9 @@ export type JobRecord = {
   posting: PostingFrontmatter | null;
   postingBody: string;
   status: StatusFile | null;
+  evaluation: EvaluationFrontmatter | null;
+  cv: CvState;
+  usage: JobUsage;
   files: string[];
   hasRawHtml: boolean;
   diagnostics: Diagnostic[];
@@ -24,12 +32,130 @@ export type JobRecord = {
   signature: string;
 };
 
-/**
- * Guard facts derived from the job's files. M3 reads verification.json and hashes cv.pdf here;
- * until tailoring exists, no job has a verified CV or a rendered PDF.
- */
-export function guardContextFor(_root: string, _id: string): GuardContext {
-  return NO_CV;
+export function sha256(data: string | Uint8Array): string {
+  return createHash("sha256").update(data).digest("hex");
+}
+
+/** What the job's files say about its tailored CV. Guards G1 to G3 are derived from this. */
+export type CvState = {
+  cvSha256: string | null;
+  verification: VerificationFile | null;
+  /** verification.json describes exactly the current cv.md. */
+  current: boolean;
+  /** G1: deterministic checks pass and no claim is unsupported. */
+  verified: boolean;
+  /** SHA-256 of cv.pdf, only when it is the render of the current cv.md. */
+  pdfSha256: string | null;
+};
+
+export const NO_CV_STATE: CvState = {
+  cvSha256: null,
+  verification: null,
+  current: false,
+  verified: false,
+  pdfSha256: null,
+};
+
+export async function readCvState(
+  root: string,
+  id: string,
+  diagnostics: Diagnostic[] = [],
+): Promise<CvState> {
+  const dir = jobDir(root, id);
+  const cvText = await readTextFile(join(dir, JOB_FILES.cv));
+  if (cvText === null) return NO_CV_STATE;
+  const cvSha256 = sha256(cvText);
+
+  let verification: VerificationFile | null = null;
+  const json = await readTextFile(join(dir, JOB_FILES.verification));
+  if (json !== null) {
+    const file = `${JOBS_DIR}/${id}/${JOB_FILES.verification}`;
+    try {
+      const parsed = VerificationFile.safeParse(JSON.parse(json));
+      if (parsed.success) verification = parsed.data;
+      else {
+        const first = parsed.error.issues[0];
+        diagnostics.push({
+          file,
+          severity: "error",
+          message: `Invalid${first ? `: ${formatPath(first.path)} ${first.message}` : ""}. Check the CV again to rewrite it.`,
+        });
+      }
+    } catch {
+      diagnostics.push({ file, severity: "error", message: "Not valid JSON. Check the CV again." });
+    }
+  }
+
+  const current = verification?.cv_sha256 === cvSha256;
+  const verified =
+    current &&
+    verification !== null &&
+    verification.claims.length > 0 &&
+    !verification.checks.some((c) => c.severity === "error") &&
+    !verification.claims.some((c) => c.verdict === "unsupported");
+
+  let pdfSha256: string | null = null;
+  if (current && verification?.render) {
+    try {
+      const pdf = await readFile(join(dir, JOB_FILES.cvPdf));
+      const hash = sha256(pdf);
+      if (hash === verification.render.pdf_sha256) pdfSha256 = hash;
+    } catch (error) {
+      if (!isNotFound(error)) throw error;
+    }
+  }
+  return { cvSha256, verification, current, verified, pdfSha256 };
+}
+
+export function guardContextOf(cv: CvState): GuardContext {
+  return { cvVerified: cv.verified, cvPdfSha256: cv.pdfSha256 };
+}
+
+/** Guard facts derived from the job's files: verification.json, cv.md and the hash of cv.pdf. */
+export async function guardContextFor(root: string, id: string): Promise<GuardContext> {
+  return guardContextOf(await readCvState(root, id));
+}
+
+async function readEvaluation(
+  root: string,
+  id: string,
+  diagnostics: Diagnostic[],
+): Promise<EvaluationFrontmatter | null> {
+  const text = await readTextFile(join(jobDir(root, id), JOB_FILES.evaluation));
+  if (text === null) return null;
+  const file = `${JOBS_DIR}/${id}/${JOB_FILES.evaluation}`;
+  const split = splitFrontmatter(text);
+  if (split.yaml === null) {
+    diagnostics.push({ file, severity: "error", message: "Missing YAML frontmatter", line: 1 });
+    return null;
+  }
+  const parsed = parseYaml(split.yaml, EvaluationFrontmatter, {
+    file,
+    lineOffset: split.yamlStartLine - 1,
+  });
+  diagnostics.push(...parsed.diagnostics);
+  return parsed.value;
+}
+
+/** Sums the job's ai-log.jsonl: what the AI work on this job has cost so far. */
+async function readUsage(root: string, id: string): Promise<JobUsage> {
+  const usage: JobUsage = { tasks: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+  const text = await readTextFile(join(jobDir(root, id), JOB_FILES.aiLog));
+  for (const line of text?.split("\n") ?? []) {
+    if (!line.trim()) continue;
+    try {
+      const entry = JSON.parse(line) as Record<string, unknown>;
+      usage.tasks += 1;
+      usage.inputTokens += Number(entry.input_tokens) || 0;
+      usage.outputTokens += Number(entry.output_tokens) || 0;
+      const cost = entry.cost_usd;
+      usage.costUsd =
+        usage.costUsd === null || typeof cost !== "number" ? null : usage.costUsd + cost;
+    } catch {
+      // A torn last line while a task is writing: ignore it.
+    }
+  }
+  return usage;
 }
 
 export function isJobId(name: string): boolean {
@@ -145,6 +271,12 @@ export async function readJob(root: string, id: string): Promise<JobRecord | nul
     }
   }
 
+  const evaluation = await readEvaluation(root, id, diagnostics);
+  // The score is always recomputed from the matrix, so a hand edit of the matrix is honoured.
+  const score = evaluation ? computeScore(evaluation.fit.requirements) : null;
+  const cv = await readCvState(root, id, diagnostics);
+  const usage = await readUsage(root, id);
+
   const fallback = namesFromId(id);
   const firstEvent = status?.history[0];
   const lastEvent = status?.history.at(-1);
@@ -167,8 +299,9 @@ export async function readJob(root: string, id: string): Promise<JobRecord | nul
     location: posting?.location ?? null,
     workplace: posting?.workplace ?? "unknown",
     salary: posting?.salary ?? null,
-    score: null,
-    band: null,
+    score: score?.score ?? null,
+    band: score?.band ?? null,
+    recommendation: evaluation?.recommendation.verdict ?? null,
     base: status?.base ?? null,
     tags: status?.tags ?? [],
     addedAt,
@@ -177,7 +310,7 @@ export async function readJob(root: string, id: string): Promise<JobRecord | nul
     noteCount: status?.notes.length ?? 0,
     errors: diagnostics.filter((d) => d.severity === "error").length,
     warnings: diagnostics.filter((d) => d.severity === "warning").length,
-    transitions: status ? transitionOptions(status, guardContextFor(root, id)) : [],
+    transitions: status ? transitionOptions(status, guardContextOf(cv)) : [],
   };
 
   return {
@@ -185,6 +318,9 @@ export async function readJob(root: string, id: string): Promise<JobRecord | nul
     posting,
     postingBody,
     status,
+    evaluation,
+    cv,
+    usage,
     files,
     hasRawHtml: files.includes(JOB_FILES.postingHtml),
     diagnostics,

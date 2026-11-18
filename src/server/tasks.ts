@@ -24,6 +24,40 @@ export class TaskRunner {
   #tasks = new Map<string, TaskInfo>();
   #controllers = new Map<string, AbortController>();
   #listeners = new Set<Listener>();
+  readonly #limit: number;
+  #active = 0;
+  #waiting: (() => void)[] = [];
+
+  /** `concurrency`: how many tasks do work at once; the rest wait their turn. */
+  constructor(options: { concurrency?: number } = {}) {
+    this.#limit = Math.max(1, options.concurrency ?? 3);
+  }
+
+  async #acquire(signal: AbortSignal, progress: (message: string) => void): Promise<void> {
+    if (this.#active < this.#limit) {
+      this.#active++;
+      return;
+    }
+    progress("Waiting for other tasks to finish");
+    await new Promise<void>((resolve, reject) => {
+      const go = () => {
+        signal.removeEventListener("abort", cancel);
+        this.#active++;
+        resolve();
+      };
+      const cancel = () => {
+        this.#waiting = this.#waiting.filter((w) => w !== go);
+        reject(new Error("Cancelled."));
+      };
+      signal.addEventListener("abort", cancel, { once: true });
+      this.#waiting.push(go);
+    });
+  }
+
+  #release(): void {
+    this.#active--;
+    this.#waiting.shift()?.();
+  }
 
   subscribe(listener: Listener): () => void {
     this.#listeners.add(listener);
@@ -53,21 +87,37 @@ export class TaskRunner {
     return Boolean(controller);
   }
 
-  /** Starts `work` in the background; refuses a second running task of the same exclusive kind. */
+  /** The running task for a job, if any. */
+  runningForJob(jobId: string): TaskInfo | undefined {
+    return this.list().find((t) => t.state === "running" && t.jobId === jobId);
+  }
+
+  /**
+   * Starts `work` in the background. Refuses a second running task of the same exclusive kind, and
+   * a second task for the same job.
+   */
   start(
     kind: string,
     label: string,
     work: (ctx: TaskContext) => Promise<unknown>,
-    options: { exclusive?: boolean } = {},
+    options: { exclusive?: boolean; jobId?: string } = {},
   ): TaskInfo {
     if (options.exclusive && this.running(kind)) {
       throw new HttpError(409, "task-running", "That is already running. Wait for it to finish.");
+    }
+    if (options.jobId && this.runningForJob(options.jobId)) {
+      throw new HttpError(
+        409,
+        "job-busy",
+        "Something is already running for this job. Wait for it to finish.",
+      );
     }
     const controller = new AbortController();
     let task: TaskInfo = {
       id: randomUUID(),
       kind,
       label,
+      ...(options.jobId ? { jobId: options.jobId } : {}),
       state: "running",
       startedAt: localIsoDateTime(),
       usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
@@ -103,7 +153,14 @@ export class TaskRunner {
       },
     };
 
-    void work(ctx)
+    void this.#acquire(controller.signal, ctx.progress)
+      .then(async () => {
+        try {
+          return await work(ctx);
+        } finally {
+          this.#release();
+        }
+      })
       .then((result) =>
         update({ state: "done", finishedAt: localIsoDateTime(), result, progress: "Done" }),
       )

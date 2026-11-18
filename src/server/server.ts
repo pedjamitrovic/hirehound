@@ -10,6 +10,7 @@ import { checkRequest } from "./http/guard.ts";
 import { HttpError, Router, sendError } from "./http/router.ts";
 import { SseHub } from "./http/sse.ts";
 import { serveStatic } from "./http/static.ts";
+import { JobFlow } from "./jobs/flow.ts";
 import { JobService } from "./jobs/service.ts";
 import { fetchPosting, SnapshotCache } from "./jobs/snapshot.ts";
 import { OnboardingService } from "./onboarding/service.ts";
@@ -41,6 +42,8 @@ export type ServerOptions = {
   configDir?: string;
   /** Test seam: answer AI tasks without Anthropic or Claude Code. */
   aiEngine?: AiEngine;
+  /** Test seam: a PDF renderer (tests without a browser use a fake). */
+  pdf?: PdfRenderer;
 };
 
 export type RunningServer = {
@@ -91,13 +94,15 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   await ai.load();
   const tasks = new TaskRunner();
   tasks.subscribe((task) => hub.broadcast({ type: "task", task }));
-  const pdf = new PdfRenderer();
+  const pdf = options.pdf ?? new PdfRenderer();
   const profile = new ProfileService({ root, pdf });
+  const jobs = new JobService({ root, index });
   const context: AppContext = {
     root,
     index,
     hub,
-    jobs: new JobService({ root, index }),
+    jobs,
+    flow: new JobFlow({ root, index, jobs, profile, ai, tasks, pdf }),
     snapshots: new SnapshotCache(),
     fetchPosting: options.fetchPosting ?? ((url) => fetchPosting(url)),
     openFolder: options.openFolder ?? openExternal,

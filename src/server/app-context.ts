@@ -1,5 +1,6 @@
 import type { AiService } from "./ai/service.ts";
 import type { SseHub } from "./http/sse.ts";
+import type { JobFlow } from "./jobs/flow.ts";
 import type { JobService } from "./jobs/service.ts";
 import type { Snapshot, SnapshotCache } from "./jobs/snapshot.ts";
 import type { OnboardingService } from "./onboarding/service.ts";
@@ -14,6 +15,8 @@ export type AppContext = {
   index: WorkspaceIndex;
   hub: SseHub;
   jobs: JobService;
+  /** Evaluate, tailor, check and approve (M3). */
+  flow: JobFlow;
   snapshots: SnapshotCache;
   /** Fetches and extracts a posting page (injectable so tests never touch the network). */
   fetchPosting: (url: string) => Promise<Snapshot>;
