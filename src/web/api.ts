@@ -12,6 +12,8 @@ import type {
   BulkTransitionBody,
   BulkTransitionResult,
   ContactBody,
+  CoverLetterBody,
+  CoverLetterView,
   CreateJobRequest,
   CvView,
   EvaluationView,
@@ -121,6 +123,17 @@ export const api = {
     `${job(id)}/cv.pdf${version ? `?v=${version.slice(0, 12)}` : ""}`,
   approve: (id: string, body: ApproveBody = {}) =>
     request<JobDetail>("POST", `${job(id)}/approve`, body),
+
+  // M4: cover letter, with its own checks and approval.
+  coverLetter: (id: string) => request<CoverLetterView>("GET", `${job(id)}/cover-letter`),
+  writeCoverLetter: (id: string, body: CoverLetterBody) =>
+    request<TaskInfo>("POST", `${job(id)}/cover-letter`, body),
+  saveCoverLetter: (id: string, text: string, expectedSha256: string | null) =>
+    request<TaskInfo>("PUT", `${job(id)}/cover-letter`, { text, expectedSha256 }),
+  checkCoverLetter: (id: string) => request<TaskInfo>("POST", `${job(id)}/cover-letter/check`),
+  approveCoverLetter: (id: string) => request<JobDetail>("POST", `${job(id)}/cover-letter/approve`),
+  coverLetterPdfUrl: (id: string, download = false, version?: string) =>
+    `${job(id)}/cover-letter.pdf?${new URLSearchParams({ ...(download ? { download: "1" } : {}), ...(version ? { v: version.slice(0, 12) } : {}) })}`,
 
   // M4: apply. Hirehound never submits a form; "applied" records what you submitted.
   application: (id: string) => request<ApplicationView>("GET", `${job(id)}/application`),

@@ -182,7 +182,27 @@
   border-radius: var(--radius);
 }
 
+.letter-panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.letter-rows {
+  gap: 2px;
+}
+
+.letter-line {
+  margin: var(--space-2) 0;
+  padding-left: 22px;
+}
+
 @media (max-width: 1100px) {
+  .letter-panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .apply {
     grid-template-columns: minmax(0, 1fr);
   }

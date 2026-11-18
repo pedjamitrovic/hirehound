@@ -22,6 +22,7 @@ import { openMove } from "../state/actions.ts";
 import { jobRevisions, upsertJob } from "../state/store.ts";
 import { toast } from "../state/toasts.ts";
 import { ApplicationTab } from "./job/ApplicationTab.tsx";
+import { CoverLetterTab } from "./job/CoverLetterTab.tsx";
 import { CvTab } from "./job/CvTab.tsx";
 import { EvaluationTab } from "./job/EvaluationTab.tsx";
 import { DiagnosticList } from "./Settings.tsx";
@@ -37,10 +38,6 @@ const TAB_LABELS: Record<TabId, string> = {
 };
 
 const LATER: Partial<Record<TabId, { milestone: string; text: string }>> = {
-  "cover-letter": {
-    milestone: "M4",
-    text: "An optional cover letter with its own approval, following your cover letter policy, next to the application.",
-  },
   interview: {
     milestone: "M6",
     text: "Likely questions, matching stories, the exact CV you sent and a place for debrief notes.",
@@ -581,6 +578,7 @@ export function JobScreen(props: ScreenProps & { id: string; tab: TabId }) {
             {tab === "posting" ? <PostingTab detail={detail} /> : null}
             {tab === "evaluation" ? <EvaluationTab detail={detail} /> : null}
             {tab === "cv" ? <CvTab detail={detail} onChange={onChange} /> : null}
+            {tab === "cover-letter" ? <CoverLetterTab detail={detail} onChange={onChange} /> : null}
             {tab === "application" ? <ApplicationTab detail={detail} onChange={onChange} /> : null}
             {tab === "timeline" ? <TimelineTab detail={detail} /> : null}
             {later ? (

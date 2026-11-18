@@ -582,7 +582,16 @@ export function ApplicationTab(props: {
             <li>
               <strong>Cover letter.</strong>{" "}
               {view.coverLetter ? (
-                <>The approved cover letter is ready in the Cover letter tab.</>
+                <>
+                  If the form asks for one, attach the approved letter.
+                  <a
+                    class="btn small"
+                    href={api.coverLetterPdfUrl(id, true)}
+                    download={view.coverLetter.fileName}
+                  >
+                    Download {view.coverLetter.fileName}
+                  </a>
+                </>
               ) : (
                 <span class="muted">
                   None approved. If the form asks for one, write it in the{" "}
