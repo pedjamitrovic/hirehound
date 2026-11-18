@@ -2,7 +2,7 @@
 
 🐕 Hirehound: a local-first web app that sniffs out the right jobs and tailors your CV for each one, using only what you've actually done. Every claim is linked to your real experience, you approve every application, and you always press Submit. Powered by Claude.
 
-> **Status: early development.** M0 (foundation) and M1 (adding jobs by link or text, Kanban and table pipeline, job dossier) work today. AI evaluation, tailoring, verification and applying arrive in M2 to M4. See [the PRD](docs/PRD.md) for the full plan.
+> **Status: early development.** Working today: the job pipeline (add jobs by link or text, Kanban and table, job dossier) and onboarding (import your CVs, Claude drafts an evidence-linked experience bank you review, base CVs with PDF preview). Evaluation, tailoring with verification, and applying arrive in M3 and M4. See [the PRD](docs/PRD.md) for the full plan.
 
 ## Why
 
@@ -46,6 +46,15 @@ npm start -- --workspace ~/jobs-workspace
 
 or set `HIREHOUND_WORKSPACE`, or put `workspace: ~/jobs-workspace` in `~/.config/hirehound/config.yaml`. `npm run init -- <path>` creates a workspace without starting the app. (A one-command `npx hirehound` install arrives in M7.)
 
+### Connecting Claude
+
+Onboarding and (later) evaluation and tailoring use Claude. In **Settings, AI engine**, choose one:
+
+- **Anthropic API**: set `ANTHROPIC_API_KEY`, or paste a key in Settings (it is stored in `~/.config/hirehound/credentials.yaml`, readable only by your user, never in the workspace).
+- **Claude Code**: uses your existing Claude Code login, if the `claude` command is installed.
+
+The default model is Claude Opus 5.5; each AI task's token use and estimated cost is logged to `ai-log.jsonl` in your workspace. PDFs are rendered by the Google Chrome or Microsoft Edge already installed on your computer.
+
 ### Your data
 
 Everything lives as plain Markdown and YAML in your workspace folder: profile, base CVs, one folder per job with the posting snapshot, evaluation, tailored CV and status history. The format is documented in [docs/data-contract.md](docs/data-contract.md). You can edit the files by hand or with Claude Code and the app updates live. Back the folder up with git, using a **private** repository; Hirehound warns you if the workspace sits in a repository with a remote.
@@ -64,6 +73,8 @@ Conventions are in [CLAUDE.md](CLAUDE.md). The stack is deliberately small: Node
 ## Credits
 
 Hirehound stands on the shoulders of [career-ops](https://github.com/career-ops-hq/career-ops) (MIT), the most complete open-source AI job search pipeline we know of. Several of its ideas shape Hirehound: multi-block evaluation, weighted requirements labelled by evidence source, legitimacy and ghost-job checks, the score guardrail, the anti-fabrication checks, the STAR+R story bank, files as the canonical store with a documented data contract, and editable prompts. Hirehound is a separate project with its own code; it differs mainly in being web-first, in linking every tailored claim to evidence with a blocking faithfulness verifier, in supporting multiple base profiles, and in locking approval to the exact PDF.
+
+The CV themes use the [Inter](https://rsms.me/inter/) typeface by The Inter Project Authors, bundled under the SIL Open Font License 1.1 (see `src/server/pdf/fonts/OFL.txt`).
 
 ## License
 

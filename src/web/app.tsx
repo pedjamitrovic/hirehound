@@ -11,8 +11,10 @@ import { EmptyState } from "./components/ui.tsx";
 import { useHotkeys } from "./hotkeys.ts";
 import { navigate, type Route, route } from "./router.ts";
 import { JobScreen } from "./screens/Job.tsx";
+import { OnboardingScreen } from "./screens/Onboarding.tsx";
 import { PipelineScreen } from "./screens/Pipeline.tsx";
 import { Placeholder } from "./screens/Placeholder.tsx";
+import { ProfileScreen } from "./screens/Profile.tsx";
 import { SettingsScreen } from "./screens/Settings.tsx";
 import { TodayScreen } from "./screens/Today.tsx";
 import { addJobOpen, moveRequest } from "./state/actions.ts";
@@ -32,6 +34,7 @@ const TITLES: Record<Route["name"], string> = {
   profile: "Profile",
   sources: "Sources",
   insights: "Insights",
+  onboarding: "Onboarding",
   settings: "Settings",
   "not-found": "Not found",
 };
@@ -46,15 +49,9 @@ function Screen(props: { route: Route } & ScreenProps) {
     case "settings":
       return <SettingsScreen frame={props.frame} />;
     case "profile":
-      return (
-        <Placeholder
-          frame={props.frame}
-          title="Profile"
-          icon="profile"
-          milestone="M2"
-          text="The experience bank editor, base CVs, stories and saved answers arrive with onboarding. Until then you can edit the files in the profile folder directly."
-        />
-      );
+      return <ProfileScreen frame={props.frame} tab={r.tab} baseId={r.baseId} />;
+    case "onboarding":
+      return <OnboardingScreen frame={props.frame} />;
     case "sources":
       return (
         <Placeholder

@@ -15,7 +15,11 @@ export const PROFILE_FILES = {
   contact: "profile/contact.yaml",
   preferences: "profile/preferences.yaml",
   answers: "profile/answers.yaml",
+  bank: "profile/experience-bank.yaml",
+  onboarding: "profile/onboarding.yaml",
 } as const;
+
+export const IMPORTS_DIR = "profile/imports";
 
 export const BASES_DIR = "profile/bases";
 export const JOBS_DIR = "jobs";

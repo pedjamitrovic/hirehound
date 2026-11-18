@@ -1,5 +1,5 @@
 import { batch, computed, signal } from "@preact/signals";
-import type { JobSummary, ServerEvent, WorkspaceInfo } from "../../shared/schemas/api.ts";
+import type { JobSummary, ServerEvent, TaskInfo, WorkspaceInfo } from "../../shared/schemas/api.ts";
 import { isClosed } from "../../shared/states.ts";
 import { api, errorMessage } from "../api.ts";
 
@@ -8,6 +8,15 @@ export const workspace = signal<WorkspaceInfo | null>(null);
 export const connection = signal<"connecting" | "live" | "offline">("connecting");
 export const loaded = signal(false);
 export const loadError = signal<string | null>(null);
+
+/** Background jobs (AI tasks) by id, newest first when listed. */
+export const tasks = signal<ReadonlyMap<string, TaskInfo>>(new Map());
+export const runningTasks = computed(() =>
+  [...tasks.value.values()].filter((t) => t.state === "running"),
+);
+
+/** Bumped whenever profile files change on disk, so open profile screens reload. */
+export const profileRevision = signal(0);
 
 /** Bumped per job whenever the server reports a change, so open dossiers refetch. */
 export const jobRevisions = signal<ReadonlyMap<string, number>>(new Map());
@@ -48,9 +57,18 @@ function handle(event: ServerEvent): void {
       });
       break;
     }
-    case "workspace":
+    case "workspace": {
+      const changed = workspace.value?.profile.revision !== event.info.profile.revision;
       workspace.value = event.info;
+      if (changed) profileRevision.value += 1;
       break;
+    }
+    case "task": {
+      const next = new Map(tasks.value);
+      next.set(event.task.id, event.task);
+      tasks.value = next;
+      break;
+    }
     case "hello":
       break;
   }
@@ -58,9 +76,10 @@ function handle(event: ServerEvent): void {
 
 export async function refresh(): Promise<void> {
   try {
-    const [info, list] = await Promise.all([api.workspace(), api.jobs()]);
+    const [info, list, taskList] = await Promise.all([api.workspace(), api.jobs(), api.tasks()]);
     batch(() => {
       workspace.value = info;
+      tasks.value = new Map(taskList.map((t) => [t.id, t]));
       jobs.value = new Map(list.map((j) => [j.id, j]));
       loaded.value = true;
       loadError.value = null;

@@ -8,6 +8,12 @@ import { z } from "zod";
 export const AppConfig = z.object({
   workspace: z.string().min(1).optional(),
   port: z.number().int().min(1).max(65535).optional(),
+  ai: z
+    .object({
+      engine: z.enum(["anthropic-api", "claude-code"]).optional(),
+      model: z.string().min(1).optional(),
+    })
+    .optional(),
 });
 export type AppConfig = z.infer<typeof AppConfig>;
 

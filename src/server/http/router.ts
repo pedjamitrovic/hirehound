@@ -40,6 +40,8 @@ export type RouteContext = {
   params: Record<string, string>;
   /** Reads and validates a JSON body. Throws HttpError 400/413/415. */
   body<T>(schema: z.ZodType<T>): Promise<T>;
+  /** Reads a binary upload (content-type application/octet-stream). Throws HttpError 413/415. */
+  raw(limitBytes: number): Promise<Buffer>;
 };
 
 export type Handler = (ctx: RouteContext) => unknown;
@@ -117,6 +119,32 @@ async function readBody(req: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
+/**
+ * Binary uploads. application/octet-stream is not a CORS-safelisted type, so a cross-site page cannot
+ * send one without a preflight that the Origin check then refuses.
+ */
+export async function readRaw(req: IncomingMessage, limit: number): Promise<Buffer> {
+  const type = req.headers["content-type"] ?? "";
+  if (!type.toLowerCase().startsWith("application/octet-stream")) {
+    throw new HttpError(415, "unsupported-media-type", "Send the file as application/octet-stream");
+  }
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req) {
+    const buffer = chunk as Buffer;
+    size += buffer.length;
+    if (size > limit) {
+      throw new HttpError(
+        413,
+        "too-large",
+        `The file is larger than ${Math.round(limit / 1_000_000)} MB`,
+      );
+    }
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks);
+}
+
 export async function parseBody<T>(req: IncomingMessage, schema: z.ZodType<T>): Promise<T> {
   const text = await readBody(req);
   let raw: unknown;
@@ -153,6 +181,10 @@ export class Router {
     return this.#add("POST", path, handler);
   }
 
+  put(path: string, handler: Handler): this {
+    return this.#add("PUT", path, handler);
+  }
+
   delete(path: string, handler: Handler): this {
     return this.#add("DELETE", path, handler);
   }
@@ -167,7 +199,14 @@ export class Router {
       if (!params) continue;
       pathMatched = true;
       if (route.method !== method) continue;
-      const ctx: RouteContext = { req, res, url, params, body: (schema) => parseBody(req, schema) };
+      const ctx: RouteContext = {
+        req,
+        res,
+        url,
+        params,
+        body: (schema) => parseBody(req, schema),
+        raw: (limit) => readRaw(req, limit),
+      };
       const result = await route.handler(ctx);
       if (result === HANDLED) return;
       if (result instanceof Reply) sendJson(res, result.status, result.body);

@@ -1,16 +1,40 @@
+import type { AnswersFile } from "../shared/schemas/answers.ts";
 import type {
+  AiSettings,
   ApiErrorBody,
+  BaseDetail,
+  BaseSummary,
   BulkTransitionBody,
   BulkTransitionResult,
   ContactBody,
   CreateJobRequest,
+  ImportInfo,
   JobDetail,
   JobSummary,
   NoteBody,
   PostingDraft,
+  ProfileFile,
+  TaskInfo,
   TransitionBody,
   WorkspaceInfo,
 } from "../shared/schemas/api.ts";
+import type { BankFile, BankKind } from "../shared/schemas/bank.ts";
+import type { Contact } from "../shared/schemas/contact.ts";
+import type { OnboardingFile } from "../shared/schemas/onboarding.ts";
+import type { Preferences } from "../shared/schemas/preferences.ts";
+
+/** A bank edit, as accepted by POST /api/profile/bank/ops. */
+export type BankOpInput =
+  | { op: "upsert"; kind: BankKind; entry: Record<string, unknown>; parent?: string }
+  | { op: "delete"; id: string }
+  | { op: "confirm"; ids: string[]; confirmed: boolean };
+
+export type BaseSpecInput = {
+  label: string;
+  track: "management" | "ic";
+  target_titles: string[];
+  emphasis: string[];
+};
 
 export class ApiError extends Error {
   readonly status: number;
@@ -24,13 +48,17 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, raw?: Blob): Promise<T> {
   let res: Response;
   try {
     res = await fetch(path, {
       method,
-      headers: body === undefined ? {} : { "content-type": "application/json" },
-      body: body === undefined ? null : JSON.stringify(body),
+      headers: raw
+        ? { "content-type": "application/octet-stream" }
+        : body === undefined
+          ? {}
+          : { "content-type": "application/json" },
+      body: raw ?? (body === undefined ? null : JSON.stringify(body)),
     });
   } catch {
     throw new ApiError(0, {
@@ -71,6 +99,70 @@ export const api = {
     request<JobDetail>("DELETE", `${job(id)}/contacts/${index}?name=${encodeURIComponent(name)}`),
   openFolder: (id: string) => request<void>("POST", `${job(id)}/open-folder`, {}),
   rawPostingUrl: (id: string) => `${job(id)}/raw/posting.html`,
+
+  // Profile files. Saves send the SHA-256 they were read with; a 409 means "reload first".
+  contact: () => request<ProfileFile<Contact>>("GET", "/api/profile/contact"),
+  saveContact: (value: unknown, expectedSha256: string | null) =>
+    request<ProfileFile<Contact>>("PUT", "/api/profile/contact", { value, expectedSha256 }),
+  preferences: () => request<ProfileFile<Preferences>>("GET", "/api/profile/preferences"),
+  savePreferences: (value: unknown, expectedSha256: string | null) =>
+    request<ProfileFile<Preferences>>("PUT", "/api/profile/preferences", { value, expectedSha256 }),
+  answers: () => request<ProfileFile<AnswersFile>>("GET", "/api/profile/answers"),
+  saveAnswers: (value: unknown, expectedSha256: string | null) =>
+    request<ProfileFile<AnswersFile>>("PUT", "/api/profile/answers", { value, expectedSha256 }),
+
+  bank: () => request<ProfileFile<BankFile>>("GET", "/api/profile/bank"),
+  bankOps: (ops: BankOpInput[], expectedSha256: string | null) =>
+    request<ProfileFile<BankFile> & { created: string[] }>("POST", "/api/profile/bank/ops", {
+      ops,
+      expectedSha256,
+    }),
+
+  bases: () => request<BaseSummary[]>("GET", "/api/profile/bases"),
+  base: (id: string) => request<BaseDetail>("GET", `/api/profile/bases/${encodeURIComponent(id)}`),
+  saveBase: (id: string, text: string, expectedSha256: string | null) =>
+    request<BaseDetail>("PUT", `/api/profile/bases/${encodeURIComponent(id)}`, {
+      text,
+      expectedSha256,
+    }),
+  deleteBase: (id: string) =>
+    request<void>("DELETE", `/api/profile/bases/${encodeURIComponent(id)}`),
+  draftBase: (spec: BaseSpecInput) => request<TaskInfo>("POST", "/api/profile/bases/draft", spec),
+  basePreviewUrl: (id: string, theme?: string, version?: string) =>
+    `/api/profile/bases/${encodeURIComponent(id)}/preview?${new URLSearchParams({ ...(theme ? { theme } : {}), ...(version ? { v: version } : {}) })}`,
+  basePdfUrl: (id: string, theme?: string, version?: string) =>
+    `/api/profile/bases/${encodeURIComponent(id)}/pdf?${new URLSearchParams({ ...(theme ? { theme } : {}), ...(version ? { v: version } : {}) })}`,
+
+  imports: () => request<ImportInfo[]>("GET", "/api/profile/imports"),
+  uploadImport: (file: File) =>
+    request<ImportInfo>(
+      "POST",
+      `/api/profile/imports?name=${encodeURIComponent(file.name)}`,
+      undefined,
+      file,
+    ),
+  deleteImport: (name: string) =>
+    request<void>("DELETE", `/api/profile/imports/${encodeURIComponent(name)}`),
+
+  onboarding: () => request<OnboardingFile>("GET", "/api/onboarding"),
+  draftBank: (names?: string[]) =>
+    request<TaskInfo>("POST", "/api/onboarding/draft", names ? { names } : {}),
+  saveQuestionAnswers: (answers: { id: string; answer?: string; status?: "open" | "skipped" }[]) =>
+    request<OnboardingFile>("PUT", "/api/onboarding/answers", { answers }),
+  proposeAnswers: () => request<TaskInfo>("POST", "/api/onboarding/answers/propose"),
+  resolveQuestions: (ids: string[], status: "applied" | "skipped" | "open") =>
+    request<OnboardingFile>("POST", "/api/onboarding/questions/resolve", { ids, status }),
+
+  tasks: () => request<TaskInfo[]>("GET", "/api/tasks"),
+  cancelTask: (id: string) => request<void>("POST", `/api/tasks/${encodeURIComponent(id)}/cancel`),
+
+  aiSettings: () => request<AiSettings>("GET", "/api/settings/ai"),
+  saveAiSettings: (patch: { engine?: AiSettings["engine"]; model?: string }) =>
+    request<AiSettings>("PUT", "/api/settings/ai", patch),
+  saveApiKey: (key: string | null) => request<AiSettings>("PUT", "/api/settings/ai/key", { key }),
+  testAi: () =>
+    request<{ ok: boolean; detail: string; reason?: string }>("POST", "/api/settings/ai/test"),
+  pdfStatus: () => request<{ ok: boolean; detail: string }>("GET", "/api/settings/pdf"),
 };
 
 export function errorMessage(error: unknown): string {

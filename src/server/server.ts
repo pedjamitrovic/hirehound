@@ -2,15 +2,22 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 import type { ViteDevServer } from "vite";
+import { AiService } from "./ai/service.ts";
+import type { AiEngine } from "./ai/types.ts";
 import type { AppContext } from "./app-context.ts";
+import { configDir } from "./config.ts";
 import { checkRequest } from "./http/guard.ts";
 import { HttpError, Router, sendError } from "./http/router.ts";
 import { SseHub } from "./http/sse.ts";
 import { serveStatic } from "./http/static.ts";
 import { JobService } from "./jobs/service.ts";
 import { fetchPosting, SnapshotCache } from "./jobs/snapshot.ts";
+import { OnboardingService } from "./onboarding/service.ts";
 import { openExternal } from "./open.ts";
+import { PdfRenderer } from "./pdf/render.ts";
+import { ProfileService } from "./profile/service.ts";
 import { registerRoutes } from "./routes/index.ts";
+import { TaskRunner } from "./tasks.ts";
 import { errorCode } from "./workspace/fsx.ts";
 import { WorkspaceIndex } from "./workspace/index.ts";
 import { type WatchOptions, watchWorkspace } from "./workspace/watcher.ts";
@@ -30,6 +37,10 @@ export type ServerOptions = {
   /** Test seams: no network, no file manager windows. */
   fetchPosting?: AppContext["fetchPosting"];
   openFolder?: AppContext["openFolder"];
+  /** Where config.yaml and credentials.yaml live (default ~/.config/hirehound). Tests use a temp dir. */
+  configDir?: string;
+  /** Test seam: answer AI tasks without Anthropic or Claude Code. */
+  aiEngine?: AiEngine;
 };
 
 export type RunningServer = {
@@ -73,6 +84,15 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   const hub = new SseHub();
   index.subscribe((event) => hub.broadcast(event));
   const root = options.workspace;
+  const ai = new AiService({
+    configDir: options.configDir ?? configDir(),
+    ...(options.aiEngine ? { engine: options.aiEngine } : {}),
+  });
+  await ai.load();
+  const tasks = new TaskRunner();
+  tasks.subscribe((task) => hub.broadcast({ type: "task", task }));
+  const pdf = new PdfRenderer();
+  const profile = new ProfileService({ root, pdf });
   const context: AppContext = {
     root,
     index,
@@ -81,6 +101,11 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
     snapshots: new SnapshotCache(),
     fetchPosting: options.fetchPosting ?? ((url) => fetchPosting(url)),
     openFolder: options.openFolder ?? openExternal,
+    ai,
+    tasks,
+    pdf,
+    profile,
+    onboarding: new OnboardingService({ profile, ai, tasks }),
     log,
   };
 
@@ -166,7 +191,9 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
     context,
     async close() {
       watcher.close();
+      tasks.cancelAll();
       hub.close();
+      await pdf.close();
       await vite?.close();
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));

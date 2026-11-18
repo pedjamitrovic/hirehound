@@ -39,7 +39,18 @@ Run against a throwaway workspace while developing: `node bin/hirehound.ts --wor
 - `src/shared` is isomorphic (no `node:*` imports, no DOM): Zod schemas, the state machine, the
   score function, slugs, frontmatter. Server and web import it.
 - Web: Preact + `@preact/signals`, a ~100-line router (`src/web/router.ts`), plain CSS with
-  custom properties and nesting (`src/web/styles`). No component or state library.
+  custom properties and nesting (`src/web/styles`). No component or state library. Never import a
+  Zod schema as a value in web code (it pulls Zod into the bundle): `import type`, or plain lists
+  from `src/shared/enums.ts`.
+- AI: every LLM call is a task in `src/server/onboarding/tasks.ts` style (`TaskDef`: prompt file in
+  `src/server/ai/prompts/<name>.md`, Zod output schema, deterministic `postCheck`), run with
+  `runTask` through the engine adapter (`src/server/ai`). Long work runs in the background via
+  `TaskRunner` with progress over SSE. Tests use `FakeEngine`; nothing in tests calls the network.
+- The experience bank (`profile/experience-bank.yaml`) is edited only through `applyBankOps` /
+  `appendEntries` (`src/server/profile/bank-ops.ts`): ids are allocated there and never reused.
+- PDFs: `src/server/pdf` renders the CV HTML with the installed Chrome or Edge via
+  `playwright-core` (no browser download). Themes are CSS in `src/server/pdf/themes`; the Inter
+  font (SIL OFL) is bundled in `src/server/pdf/fonts`.
 
 ## TypeScript rules (native type stripping)
 
@@ -52,7 +63,7 @@ Run against a throwaway workspace while developing: `node bin/hirehound.ts --wor
 
 ## Dependencies
 
-Runtime dependencies are limited to `preact`, `@preact/signals`, `zod`, `yaml` and (from M2)
+Runtime dependencies are limited to `preact`, `@preact/signals`, `zod`, `yaml` and
 `playwright-core`. Dev dependencies: `typescript`, `vite`, `@biomejs/biome`, `@types/node`.
 **Ask the maintainer before adding any other dependency**, with a justification. Prefer Node
 built-ins and the web platform.

@@ -72,7 +72,12 @@ export const Preferences = z.object({
     })
     .prefault({}),
   apply: z.object({ mode: z.enum(["manual", "assisted"]).default("manual") }).prefault({}),
-  cv: z.object({ max_pages: z.number().int().min(1).max(4).default(2) }).prefault({}),
+  cv: z
+    .object({
+      max_pages: z.number().int().min(1).max(4).default(2),
+      paper: z.enum(["a4", "letter"]).default("a4"),
+    })
+    .prefault({}),
 });
 
 export type Preferences = z.infer<typeof Preferences>;
