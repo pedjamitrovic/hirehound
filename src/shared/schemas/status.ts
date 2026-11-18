@@ -60,10 +60,16 @@ export const Person = z.object({
 export const Approval = z.object({
   at: IsoDateTime,
   cv_sha256: Sha256,
-  cover_letter_sha256: Sha256.optional(),
   base: BaseId,
   /** Set when approved below the score threshold. */
   override_reason: z.string().optional(),
+});
+
+/** Written in M4 when the user approves the cover letter; it has its own approval. */
+export const CoverLetterApproval = z.object({
+  at: IsoDateTime,
+  /** SHA-256 of cover-letter.pdf exactly as approved. */
+  sha256: Sha256,
 });
 
 export const ApplyMethod = z.enum(["manual", "assisted", "external"]);
@@ -74,6 +80,8 @@ export const Application = z.object({
   method: ApplyMethod,
   /** Must equal approval.cv_sha256 unless method is "external". */
   cv_sha256: Sha256.optional(),
+  /** Set when a cover letter was sent; must equal cover_letter_approval.sha256. */
+  cover_letter_sha256: Sha256.optional(),
 });
 
 export const StatusFile = z.object({
@@ -87,6 +95,7 @@ export const StatusFile = z.object({
   contacts: z.array(Person).default([]),
   tags: z.array(z.string()).default([]),
   approval: Approval.optional(),
+  cover_letter_approval: CoverLetterApproval.optional(),
   application: Application.optional(),
 });
 
@@ -96,6 +105,7 @@ export type Note = z.infer<typeof Note>;
 export type PersonRole = z.infer<typeof PersonRole>;
 export type Person = z.infer<typeof Person>;
 export type Approval = z.infer<typeof Approval>;
+export type CoverLetterApproval = z.infer<typeof CoverLetterApproval>;
 export type ApplyMethod = z.infer<typeof ApplyMethod>;
 export type Application = z.infer<typeof Application>;
 export type StatusFile = z.infer<typeof StatusFile>;

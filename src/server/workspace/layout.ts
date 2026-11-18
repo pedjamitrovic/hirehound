@@ -34,6 +34,11 @@ export const JOB_FILES = {
   changes: "changes.md",
   verification: "verification.json",
   cvPdf: "cv.pdf",
+  coverLetter: "cover-letter.md",
+  coverLetterVerification: "cover-letter.verification.json",
+  coverLetterPdf: "cover-letter.pdf",
+  application: "application.md",
+  confirmation: "confirmation.png",
   aiLog: "ai-log.jsonl",
 } as const;
 

@@ -6,6 +6,7 @@ import { entryLabel, indexBank } from "../../shared/bank.ts";
 import { checkEvidence, cvEvidenceIds } from "../../shared/cv/evidence.ts";
 import { parseCv } from "../../shared/cv/parse.ts";
 import { joinFrontmatter } from "../../shared/frontmatter.ts";
+import { type Answer, AnswersFile } from "../../shared/schemas/answers.ts";
 import type {
   BaseDetail,
   BaseSummary,
@@ -127,6 +128,61 @@ export class ProfileService {
 
   contact(): Promise<ProfileFile<Contact>> {
     return this.readYaml(PROFILE_FILES.contact, Contact);
+  }
+
+  answers(): Promise<ProfileFile<AnswersFile>> {
+    return this.readYaml(PROFILE_FILES.answers, AnswersFile);
+  }
+
+  /**
+   * Adds answers typed while applying to profile/answers.yaml, so the next form gets them for
+   * free. A question already in the library (same wording) has its answer updated instead.
+   */
+  saveAnswers(
+    items: { question: string; answer: string; kind: Answer["kind"]; sensitive: boolean }[],
+  ): Promise<ProfileFile<AnswersFile>> {
+    return this.#locked(async () => {
+      const path = this.#path(PROFILE_FILES.answers);
+      const text = await readTextFile(path);
+      const parsed = text ? parseYaml(text, AnswersFile, { file: PROFILE_FILES.answers }) : null;
+      if (text && !parsed?.value && !parsed?.empty) {
+        throw new HttpError(
+          409,
+          "answers-invalid",
+          "profile/answers.yaml has errors. Fix it first (Profile, Saved answers).",
+        );
+      }
+      const file: AnswersFile = parsed?.value ?? { version: 1, answers: [] };
+      const answers = [...file.answers];
+      const today = localIsoDate();
+      for (const item of items) {
+        const same = (q: string) => q.trim().toLowerCase() === item.question.trim().toLowerCase();
+        const existing = answers.findIndex((a) => same(a.question) || a.aliases.some(same));
+        if (existing >= 0) {
+          const current = answers[existing] as Answer;
+          answers[existing] = { ...current, answer: item.answer, updated_at: today };
+          continue;
+        }
+        const stem = slugify(item.question, 40);
+        let id = stem;
+        for (let n = 2; answers.some((a) => a.id === id); n++) id = `${stem}-${n}`;
+        answers.push({
+          id,
+          question: item.question.trim(),
+          aliases: [],
+          answer: item.answer,
+          kind: item.kind,
+          tags: [],
+          sensitive: item.sensitive,
+          updated_at: today,
+        });
+      }
+      await writeFileAtomic(
+        path,
+        updateYamlText(text, { ...file, answers }, HEADERS[PROFILE_FILES.answers] ?? ""),
+      );
+      return this.answers();
+    });
   }
 
   preferences(): Promise<ProfileFile<Preferences>> {

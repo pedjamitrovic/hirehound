@@ -234,6 +234,43 @@ export class JobService {
     return { results };
   }
 
+  /**
+   * Records that you submitted the application: approved -> applied. Guard G3 (the PDF is the one
+   * you approved) is checked against the files inside the job's lock, and so is the cover letter.
+   */
+  recordApplication(
+    id: string,
+    application: { method: "manual" | "assisted"; coverLetterSha256?: string | undefined },
+  ): Promise<JobRecord> {
+    return this.#updateStatus(id, async (status) => {
+      const check = checkTransition(
+        status,
+        { to: "applied" },
+        await guardContextFor(this.#app.root, id),
+      );
+      if (!check.ok) throw new HttpError(409, check.code, check.message);
+      const cover = application.coverLetterSha256;
+      if (cover && status.cover_letter_approval?.sha256 !== cover) {
+        throw new HttpError(
+          409,
+          "cover-letter-changed",
+          "The cover letter is not the one you approved. Approve it again or apply without it.",
+        );
+      }
+      const at = localIsoDateTime();
+      const next = applyTransition(status, { to: "applied" }, { at, by: "user" });
+      return {
+        ...next,
+        application: {
+          at,
+          method: application.method,
+          ...(status.approval ? { cv_sha256: status.approval.cv_sha256 } : {}),
+          ...(cover ? { cover_letter_sha256: cover } : {}),
+        },
+      };
+    });
+  }
+
   addNote(id: string, text: string): Promise<JobRecord> {
     return this.#updateStatus(id, (status) => ({
       ...status,
