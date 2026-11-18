@@ -83,6 +83,9 @@ ${await fontFaces()}
 html { color-scheme: light; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 @media screen { body { padding: 15mm 16mm; } }
 ${input.css}
+/* Contextual alternates swap glyphs (Inter's hyphen between digits) for ones that map to private
+   code points, so "2021-03" would come out of the PDF as "2021?03" for an ATS. Keep them off. */
+body, body * { font-variant-ligatures: no-contextual; }
 </style>
 </head>
 <body>
