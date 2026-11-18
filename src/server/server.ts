@@ -34,7 +34,6 @@ export type RunningServer = {
 };
 
 const DIST_DIR = fileURLToPath(new URL("../../dist/web", import.meta.url));
-const VITE_CONFIG = fileURLToPath(new URL("../../vite.config.ts", import.meta.url));
 
 async function listen(
   server: ReturnType<typeof createServer>,
@@ -131,10 +130,14 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
 
   if (options.dev) {
     const { createServer: createViteServer } = await import("vite");
+    // Import the config natively instead of letting Vite load it: Vite's loader bundles it to a
+    // temp file in node_modules/.vite-temp, which `node --watch` sees change, restarting forever.
+    const { default: viteConfig } = await import("../../vite.config.ts");
     vite = await createViteServer({
-      configFile: VITE_CONFIG,
+      ...viteConfig,
+      configFile: false,
       appType: "spa",
-      server: { middlewareMode: true, hmr: { server } },
+      server: { ...viteConfig.server, middlewareMode: true, hmr: { server } },
       logLevel: "warn",
     });
   }
