@@ -1,0 +1,13 @@
+{
+  // Server, CLI, shared code and tests. The web app has its own config in src/web.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2024"],
+    "types": ["node"],
+    "resolveJsonModule": true,
+    "rootDir": "."
+  },
+  "include": ["bin", "src/server", "src/shared", "test", "vite.config.ts"]
+}

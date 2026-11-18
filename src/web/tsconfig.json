@@ -1,0 +1,15 @@
+{
+  // Browser code bundled by Vite. Shared code is checked here too, against DOM libs.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2024", "dom", "dom.iterable"],
+    "types": ["vite/client"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "rootDir": "../.."
+  },
+  "include": ["./**/*", "../shared/**/*"],
+  "exclude": ["../shared/**/*.test.ts"]
+}
