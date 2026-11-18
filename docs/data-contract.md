@@ -37,12 +37,15 @@ port: 4280                         # optional
     contact.yaml                  # CV header details                         (M0 schema)
     preferences.yaml              # what you are looking for                  (M0 schema)
     answers.yaml                  # reusable application-form answers         (M0 schema)
-    experience-bank.md            # source of truth for every claim           (M2)
+    experience-bank.yaml          # source of truth for every claim           (M2)
     bases/<id>.md                 # base CVs in the CV dialect                (M2)
+    onboarding.yaml               # open questions from onboarding            (M2)
+    imports/                      # copies of the files you imported          (M2)
     stories.md                    # STAR+R story bank                         (M6)
   sources/portals.yaml            # watched companies and boards              (M5)
   prompts/                        # overrides of built-in prompts             (M2)
   templates/                      # overrides of CV / cover letter themes     (M2)
+  ai-log.jsonl                    # one line per AI task: model, tokens, cost (M2)
   jobs/<job id>/
     posting.md                    # posting snapshot: frontmatter + readable text   (M1)
     posting.html                  # raw HTML as fetched, when added from a URL      (M1)
@@ -56,7 +59,7 @@ port: 4280                         # optional
     cover-letter.md / .pdf        # optional                                        (M3)
     application.md                # answers used, confirmation snapshot             (M4)
     interview/                    # prep and debriefs                               (M6)
-    ai-log.jsonl                  # model, tokens and cost per AI task              (M2)
+    ai-log.jsonl                  # model, tokens and cost per AI task              (M3)
 ```
 
 Files and folders starting with `.` are ignored everywhere.
@@ -118,6 +121,7 @@ A file that is empty or fully commented out counts as "not set up".
 | `cover_letter.policy` | `always`, `when-requested`, `never` | `when-requested` |
 | `apply.mode` | `manual`, `assisted` | `manual` |
 | `cv.max_pages` | 1-4 | `2` |
+| `cv.paper` | `a4`, `letter` | `a4` |
 
 Salary range: `{ min?, max?, currency: ISO 4217, period: year|month|day|hour (default year), raw? }`
 with `min <= max`.
@@ -136,6 +140,92 @@ answers:
     sensitive: false              # true: never filled in without asking (EEO, disability, ...)
     updated_at: 2026-11-16
 ```
+
+## profile/experience-bank.yaml
+
+The single source of truth for every claim a CV makes. Each entry has a permanent id that CVs cite
+in evidence markers. Ids are never reused: `id_counters` records the highest number handed out per
+prefix, so deleting ACH-014 never lets a later entry become ACH-014.
+
+```yaml
+version: 1
+id_counters: { ROLE: 3, ACH: 21, SKL: 2 }
+roles:
+  - id: ROLE-003
+    company: Acme Robotics
+    title: Engineering Manager
+    start: 2021-03            # YYYY or YYYY-MM; left out when no source states it
+    end: present              # YYYY, YYYY-MM or present
+    location: Berlin, Germany
+    employment_type: full-time   # full-time | part-time | contract | freelance | internship
+    summary: Owned the internal developer platform used by 120 engineers.
+    confirmed: true
+    source: imports/2026-11-18_cv.pdf
+    achievements:
+      - id: ACH-014
+        text: Grew the platform group from 4 to 14 engineers in 18 months
+        metrics: [4 to 14 engineers, 18 months]    # figures exactly as stated
+        skills: [hiring, org design]
+        detail: Context for verification; not printed as is.
+        confirmed: true
+projects: []        # PRJ: name, role, start, end, url, summary, achievements
+education: []       # EDU: institution, degree, field, start, end, location, detail
+certifications: []  # CERT: name, issuer, date, expires, url
+skills: []          # SKL: name (the group), items
+languages: []       # LANG: name, level
+awards: []          # AWD: name, issuer, date, detail
+```
+
+Every entry also has `confirmed` (default `false`), `source` and `tags`. **Entries drafted by AI start
+unconfirmed, and CVs are only ever built from confirmed entries.** Editing an entry yourself in the app
+confirms it. `source` is an imported file (`imports/...`), `answers` (from onboarding questions) or
+`manual`. Ids are unique across the whole file and each kind has its prefix (ROLE, ACH, PRJ, EDU, CERT,
+SKL, LANG, AWD). The app edits the file one entry at a time and keeps comments elsewhere in it.
+
+## profile/onboarding.yaml
+
+Open questions from onboarding, and contact details found in imported files:
+
+```yaml
+version: 1
+contact_suggestion: { name: Alex Example, location: Berlin, links: [] }
+questions:
+  - id: Q-001
+    entry: ACH-015          # the bank entry it is about, if any
+    question: What changed after on-call was introduced?
+    why: A measurable result makes the claim stronger.
+    answer: Incidents dropped by 40%
+    status: open            # open | applied | skipped
+```
+
+## profile/imports/
+
+Copies of the files you imported during onboarding (`<date>_<name>.<ext>`: .pdf, .docx, .md, .txt or a
+LinkedIn export .zip), kept so every drafted entry can point at its source. Only the AI provider you
+configured ever sees their content. From a LinkedIn export only career data is read (profile,
+positions, education, skills, certifications, languages, projects, honors, publications, volunteering,
+received recommendations); birth date, address, messages and connections never are.
+
+## profile/bases/<id>.md
+
+Base CVs in the CV dialect (`docs/cv-dialect.md`). The id is the file name stem. Frontmatter: `id`,
+`label`, `track` (management | ic), `target_titles`, `headline`, `emphasis`, `theme` (classic | modern).
+The app checks every evidence id against the bank and warns about unconfirmed ones.
+
+## ai-log.jsonl
+
+One JSON line per AI task at the workspace root: `at`, `task`, `engine`, `model`, `ok`,
+`prompt_override`, token counts, `cost_usd` (an estimate for the API engine, Claude Code's own figure
+for that engine), `duration_ms`, and `error` on failure. It never contains prompts, files or outputs.
+
+## App settings (outside the workspace)
+
+`~/.config/hirehound/config.yaml` may also hold `ai: { engine: anthropic-api | claude-code, model }`.
+An Anthropic API key comes from `ANTHROPIC_API_KEY` or `~/.config/hirehound/credentials.yaml`
+(`anthropic_api_key`, written readable by your user only). Neither is ever written to the workspace.
+
+Workspace overrides: `prompts/<task>.md` replaces a built-in prompt (`draft-bank`, `apply-answers`,
+`draft-base`); `templates/<theme>.css` replaces a built-in CV theme (`classic`, `modern`).
 
 ## Job folders
 

@@ -18,8 +18,12 @@ src/server/
   routes/                    one module per resource
   workspace/                 init, atomic file IO, YAML diagnostics, index, watcher, git check
   jobs/                      job creation, posting snapshot and extraction, transitions (M1)
-  ai/                        AI engine adapter, tasks, prompts (M2)
-  pdf/                       PDF rendering through playwright-core (M2)
+  ai/                        engine adapter (Anthropic API, Claude Code), runTask, prompts/
+  onboarding/                AI task definitions and the onboarding flow
+  profile/                   profile files, experience bank ops, base CVs, imports
+  import/                    ZIP, DOCX and LinkedIn export readers (no dependencies)
+  pdf/                       CV HTML document, themes, bundled font, rendering via playwright-core
+  tasks.ts                   background tasks with progress over SSE
 src/web/
   main.tsx  app.tsx          bootstrap and screen switch
   router.ts  hotkeys.ts      history router, keyboard layer
@@ -69,7 +73,17 @@ The server can read and write personal files, so:
 - API keys are read from the environment or a user-only config file outside the workspace (M2) and
   are never written into the workspace.
 
-## AI engine adapter (M2)
+## AI engine adapter
+
+Implemented in M2 as designed below, with these specifics: the API engine streams, sends
+`output_config.format` with a JSON Schema derived from the task's Zod schema (unsupported keywords
+stripped; Zod enforces them afterwards) and opts into server-side refusal fallback. The Claude Code
+engine does not use `--bare` (bare mode cannot use a Claude Code login); instead it runs in an empty
+temporary folder with `--tools ""` (or only `Read` for attached PDFs) and `--no-session-persistence`,
+so no project settings, hooks or files are involved. `runTask` makes one repair attempt when the
+output fails the schema or the task's deterministic checks, and appends usage to `ai-log.jsonl`.
+
+### Original design
 
 One interface for single structured calls. Agentic flows (assisted apply, browsing discovery) are out of scope for this interface.
 
