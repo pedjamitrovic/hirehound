@@ -1,0 +1,169 @@
+/* Sources (M5): job boards, scans and LinkedIn alert imports. */
+
+.sources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 980px;
+}
+
+.success-text {
+  color: var(--success);
+}
+
+.sources-meta {
+  border-bottom: 1px solid var(--border);
+
+  & code {
+    font-size: var(--text-xs);
+  }
+}
+
+.portal-list,
+.scan-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.portal-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+
+  &:first-child {
+    border-top: 0;
+  }
+
+  &[data-enabled="false"] .portal-main {
+    opacity: 0.6;
+  }
+}
+
+.portal-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.portal-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.portal-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.portal-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.portal-board {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.scan-counts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.scan-row {
+  border-top: 1px solid var(--border);
+
+  &:first-child {
+    border-top: 0;
+  }
+}
+
+.scan-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--surface-2);
+  }
+}
+
+.scan-name {
+  min-width: 120px;
+  font-weight: 600;
+}
+
+.scan-when {
+  margin-left: auto;
+  font-size: var(--text-xs);
+}
+
+.scan-detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-3);
+  padding: 0 var(--space-4) var(--space-3) calc(var(--space-4) + 20px);
+
+  & h4 {
+    margin: 0 0 4px;
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-2);
+  }
+
+  & ul {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-sm);
+  }
+
+  & li .badge {
+    margin-left: 6px;
+  }
+}
+
+.sources-alert {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+
+  & p {
+    margin: 0;
+    max-width: 75ch;
+  }
+
+  & .dropzone {
+    padding: var(--space-5) var(--space-4);
+  }
+}

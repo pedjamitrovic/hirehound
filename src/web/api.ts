@@ -1,5 +1,6 @@
 import type { AnswersFile } from "../shared/schemas/answers.ts";
 import type {
+  AddFilteredBody,
   AiSettings,
   ApiErrorBody,
   ApplicationView,
@@ -23,6 +24,8 @@ import type {
   NoteBody,
   PostingDraft,
   ProfileFile,
+  ScanBody,
+  SourcesView,
   TailorBody,
   TaskInfo,
   TransitionBody,
@@ -31,6 +34,7 @@ import type {
 import type { BankFile, BankKind } from "../shared/schemas/bank.ts";
 import type { Contact } from "../shared/schemas/contact.ts";
 import type { OnboardingFile } from "../shared/schemas/onboarding.ts";
+import type { Portal } from "../shared/schemas/portals.ts";
 import type { Preferences } from "../shared/schemas/preferences.ts";
 
 /** A bank edit, as accepted by POST /api/profile/bank/ops. */
@@ -123,6 +127,24 @@ export const api = {
     `${job(id)}/cv.pdf${version ? `?v=${version.slice(0, 12)}` : ""}`,
   approve: (id: string, body: ApproveBody = {}) =>
     request<JobDetail>("POST", `${job(id)}/approve`, body),
+
+  // M5: discovery.
+  sources: () => request<SourcesView>("GET", "/api/sources"),
+  saveSources: (value: unknown, expectedSha256: string | null) =>
+    request<SourcesView>("PUT", "/api/sources", { value, expectedSha256 }),
+  boardFromUrl: (url: string) =>
+    request<{
+      provider: Portal["provider"];
+      board: string;
+      region: Portal["region"];
+      company: string;
+      page: string;
+    }>("POST", "/api/sources/board-from-url", { url }),
+  scan: (body: ScanBody = {}) => request<TaskInfo>("POST", "/api/sources/scan", body),
+  addFiltered: (body: AddFilteredBody) => request<JobDetail>("POST", "/api/sources/add", body),
+  importAlert: (text: string) => request<TaskInfo>("POST", "/api/sources/linkedin", { text }),
+  setPostingText: (id: string, text: string) =>
+    request<JobDetail>("PUT", `${job(id)}/posting`, { text }),
 
   // M4: cover letter, with its own checks and approval.
   coverLetter: (id: string) => request<CoverLetterView>("GET", `${job(id)}/cover-letter`),

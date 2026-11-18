@@ -7,6 +7,7 @@ import "./styles/profile.css";
 import "./styles/forms.css";
 import "./styles/review.css";
 import "./styles/apply.css";
+import "./styles/sources.css";
 import "./state/theme.ts";
 import { App } from "./app.tsx";
 
