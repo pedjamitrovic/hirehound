@@ -34,7 +34,7 @@ import type { AiService } from "../ai/service.ts";
 import { HttpError } from "../http/router.ts";
 import { cvDocumentHtml, themeCss } from "../pdf/document.ts";
 import type { PdfRenderer } from "../pdf/render.ts";
-import { extractPdfText, textCoverage } from "../pdf/text.ts";
+import { extractPdfText, pdfFontTypes, textCoverage } from "../pdf/text.ts";
 import type { ProfileService } from "../profile/service.ts";
 import type { TaskContext, TaskRunner } from "../tasks.ts";
 import { isNotFound, readTextFile, writeFileAtomic } from "../workspace/fsx.ts";
@@ -503,6 +503,15 @@ export class JobFlow {
           message: `Only ${Math.floor(render.ats.coverage * 100)}% of the CV's words come back out of the PDF${render.ats.garbled ? `, and ${plural(render.ats.garbled, "character")} come out garbled` : ""}. An ATS reads the same text.${render.ats.missing.length ? ` Missing: ${render.ats.missing.join(", ")}.` : ""}`,
         });
       }
+      if (render.ats.type3_fonts > 0) {
+        checks.push({
+          check: "format",
+          n: -1,
+          line: 1,
+          severity: "warning",
+          message: `The PDF embeds ${plural(render.ats.type3_fonts, "font")} as Type3 glyphs, which some ATS read poorly. A theme override in templates/ may use a variable font; static fonts avoid this.`,
+        });
+      }
     } catch (error) {
       checks.push({
         check: "format",
@@ -573,6 +582,7 @@ export class JobFlow {
         coverage: Math.round(ats.coverage * 1000) / 1000,
         missing: ats.missing,
         garbled: ats.garbled,
+        type3_fonts: pdfFontTypes(pdf).Type3 ?? 0,
       },
     };
   }

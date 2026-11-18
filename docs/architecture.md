@@ -23,7 +23,8 @@ src/server/
   onboarding/                AI task definitions and the onboarding flow
   profile/                   profile files, experience bank ops, base CVs, imports
   import/                    ZIP, DOCX and LinkedIn export readers (no dependencies)
-  pdf/                       CV HTML document, themes, bundled font, rendering via playwright-core
+  pdf/                       CV HTML document, themes, static Inter (@fontsource/inter), rendering
+                             via playwright-core, PDF text read-back
   tasks.ts                   background tasks with progress over SSE
 src/web/
   main.tsx  app.tsx          bootstrap and screen switch

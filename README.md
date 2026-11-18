@@ -74,7 +74,7 @@ Conventions are in [CLAUDE.md](CLAUDE.md). The stack is deliberately small: Node
 
 Hirehound stands on the shoulders of [career-ops](https://github.com/career-ops-hq/career-ops) (MIT), the most complete open-source AI job search pipeline we know of. Several of its ideas shape Hirehound: multi-block evaluation, weighted requirements labelled by evidence source, legitimacy and ghost-job checks, the score guardrail, the anti-fabrication checks, the STAR+R story bank, files as the canonical store with a documented data contract, and editable prompts. Hirehound is a separate project with its own code; it differs mainly in being web-first, in linking every tailored claim to evidence with a blocking faithfulness verifier, in supporting multiple base profiles, and in locking approval to the exact PDF.
 
-The CV themes use the [Inter](https://rsms.me/inter/) typeface by The Inter Project Authors, bundled under the SIL Open Font License 1.1 (see `src/server/pdf/fonts/OFL.txt`).
+The CV themes use the [Inter](https://rsms.me/inter/) typeface by The Inter Project Authors, installed from the [`@fontsource/inter`](https://fontsource.org/fonts/inter) package under the SIL Open Font License 1.1.
 
 ## License
 

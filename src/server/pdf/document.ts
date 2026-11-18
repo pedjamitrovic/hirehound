@@ -10,21 +10,34 @@ export type Paper = "a4" | "letter";
 
 const ASSETS = new URL("./", import.meta.url);
 
+/**
+ * Static Inter cuts from @fontsource/inter (SIL OFL 1.1). Static fonts matter: Chrome embeds a
+ * variable font as Type3 glyphs, which some applicant tracking systems read poorly. Weights the
+ * themes ask for that are not listed (650) resolve to the nearest cut.
+ */
+const FONT_CUTS = ["400", "500", "600", "700", "400-italic", "700-italic"] as const;
+
 let fontCss: Promise<string> | null = null;
 
-/** The bundled Inter fonts, inlined so rendering needs no file or network access. */
+/** @font-face rules with the font files inlined, so rendering needs no file or network access. */
 function fontFaces(): Promise<string> {
   fontCss ??= (async () => {
-    const face = async (file: string, style: string) => {
-      const data = (await readFile(new URL(`fonts/${file}`, ASSETS))).toString("base64");
-      return `@font-face{font-family:"Inter";font-style:${style};font-weight:100 900;font-display:block;src:url(data:font/woff2;base64,${data}) format("woff2");}`;
-    };
-    return (
-      await Promise.all([
-        face("InterVariable.woff2", "normal"),
-        face("InterVariable-Italic.woff2", "italic"),
-      ])
-    ).join("\n");
+    const rules: string[] = [];
+    for (const cut of FONT_CUTS) {
+      const cssUrl = new URL(import.meta.resolve(`@fontsource/inter/${cut}.css`));
+      const css = await readFile(cssUrl, "utf8");
+      for (const block of css.match(/@font-face\s*\{[^}]*\}/g) ?? []) {
+        const file = /url\(\.\/files\/([\w.-]+\.woff2)\)/.exec(block)?.[1];
+        if (!file) continue;
+        const data = (await readFile(new URL(`files/${file}`, cssUrl))).toString("base64");
+        rules.push(
+          block
+            .replace(/src:[^;]*;/, `src: url(data:font/woff2;base64,${data}) format("woff2");`)
+            .replace(/font-display:\s*\w+;/, "font-display: block;"),
+        );
+      }
+    }
+    return rules.join("\n");
   })();
   return fontCss;
 }
