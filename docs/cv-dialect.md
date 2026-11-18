@@ -78,7 +78,15 @@ base_sha256: <hash of the base file used; cv.base.md is the copy>
 headline: Engineering Manager, Platform
 generated_at: 2026-11-16T11:02:00+01:00
 engine: { id: anthropic-api, model: claude-opus-5-5 }
+theme: classic                 # copied from the base
+notes: Led with platform reliability; German is not in the bank.
 ```
+
+The deterministic checks and the verifier work per claim (`src/shared/cv/claims.ts`): entry
+headings, paragraphs and bullets in document order, as plain text without formatting. Write entry
+headings so each part stands alone between separators, for example
+`### Engineering Manager, Acme Robotics | 2021-03 - present`: the title check reads
+"Senior Engineering Manager" as a different title from "Engineering Manager".
 
 ## AST
 

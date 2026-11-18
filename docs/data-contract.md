@@ -54,9 +54,9 @@ port: 4280                         # optional
     cv.base.md                    # the base CV exactly as used for tailoring       (M3)
     cv.md                         # tailored CV with evidence markers               (M3)
     changes.md                    # each change vs base and its bank entries        (M3)
-    verification.json             # verifier result per claim                       (M3)
+    verification.json             # checks, verifier result per claim, PDF render   (M3)
     cv.pdf                        # the exact PDF approved and sent                 (M3)
-    cover-letter.md / .pdf        # optional                                        (M3)
+    cover-letter.md / .pdf        # optional                                        (M4)
     application.md                # answers used, confirmation snapshot             (M4)
     interview/                    # prep and debriefs                               (M6)
     ai-log.jsonl                  # model, tokens and cost per AI task              (M3)
@@ -225,7 +225,9 @@ An Anthropic API key comes from `ANTHROPIC_API_KEY` or `~/.config/hirehound/cred
 (`anthropic_api_key`, written readable by your user only). Neither is ever written to the workspace.
 
 Workspace overrides: `prompts/<task>.md` replaces a built-in prompt (`draft-bank`, `apply-answers`,
-`draft-base`); `templates/<theme>.css` replaces a built-in CV theme (`classic`, `modern`).
+`draft-base`, `evaluate`, `tailor`, `verify`); `templates/<theme>.css` replaces a built-in CV theme
+(`classic`, `modern`). The CV document turns off contextual font alternates after the theme CSS:
+some glyph variants map to private code points and would come out of the PDF as garbage for an ATS.
 
 ## Job folders
 
@@ -273,8 +275,9 @@ contacts:
 tags: [remote-eu]
 approval:                        # M3: written when you approve the PDF
   at: 2026-11-17T09:00:00+01:00
-  cv_sha256: <64 hex>
+  cv_sha256: <64 hex>            # SHA-256 of cv.pdf exactly as approved
   base: em
+  override_reason: Referral      # only when approved below scoring.threshold
 application:                     # M4, or method: external from M1
   at: 2026-11-17T09:30:00+01:00
   method: manual                 # manual | assisted | external
@@ -309,11 +312,20 @@ Closed states: `accepted` (final), `rejected`, `withdrawn`, `skipped`, `expired`
 | rejected, withdrawn, skipped, expired | reopen to the last open state in the history |
 | any of found..approved | applied with `method: external` (applied outside Hirehound; reason required) |
 
-Guards:
+Guards, all read from the job's files:
 
-- **G1** the tailored CV passes the deterministic checks and the verifier found no unsupported claim.
-- **G2** `cv.pdf` exists; approval records its SHA-256.
+- **G1** `verification.json` describes the current `cv.md` (its `cv_sha256` matches), has no
+  error-level check and no claim the verifier found unsupported.
+- **G2** `cv.pdf` exists and is the render recorded in that `verification.json` (`render.pdf_sha256`
+  matches); approval records its SHA-256.
 - **G3** the SHA-256 of `cv.pdf` equals `approval.cv_sha256` (the PDF has not changed since approval).
+
+Automatic moves are recorded with `by: system`: evaluating a `found` job moves it to `evaluated`;
+tailoring moves `evaluated` or `ready` to `tailoring`; a check that passes moves `tailoring` to
+`ready`, and one that fails moves `ready` back to `tailoring`, so Ready always means verified.
+Revoking an approval (approved -> ready) removes `approval`; the history keeps the record. Approving
+also needs the cited bank entries unchanged since the check, and a reason when the fit score is
+below `scoring.threshold`.
 
 External applications are labelled as such and excluded from the "every application has its exact
 PDF and approval hash" guarantee. The state machine is `src/shared/states.ts`; the API enforces it
@@ -334,3 +346,64 @@ The fit score is computed by code from the requirement matrix, never by the mode
   score is capped at 84: estimated requirements cannot carry a role into the top band
 - any `must` with `gap` caps the score at 69
 - bands: 85-100 strong, 70-84 good, 50-69 stretch, 0-49 weak
+
+The app recomputes the score from the matrix whenever it reads the file, so a hand edit of a
+requirement's `match` is honoured. Evidence ids cite confirmed bank entries only.
+
+## cv.base.md, cv.md and changes.md (M3)
+
+`cv.base.md` is a byte-for-byte copy of the base CV the tailoring started from. `cv.md` is the
+tailored CV in the CV dialect (`docs/cv-dialect.md`); every entry heading, paragraph and bullet
+cites confirmed bank entries. Its frontmatter: `job`, `base`, `base_sha256` (of the base file
+used), `headline`, `generated_at`, `engine { id, model }`, `theme` and `notes` (what the tailoring
+emphasised and left out). You may edit `cv.md` in the app or by hand; any edit makes the
+verification stale until the CV is checked again.
+
+`changes.md` is a human-readable record of one tailoring run: the request (when you asked for
+changes), the reasons given for each change with their bank ids, and the claims changed, added and
+removed against the base. Nothing reads it back.
+
+## verification.json (M3)
+
+Everything known about one exact version of `cv.md`:
+
+```json
+{
+  "version": 1,
+  "cv_sha256": "<sha256 of cv.md>",
+  "bank_sha256": "<sha256 of experience-bank.yaml at check time>",
+  "checked_at": "2026-11-18T20:40:45+01:00",
+  "engine": { "id": "anthropic-api", "model": "claude-opus-5-5" },
+  "checks": [
+    { "check": "numbers", "n": 4, "line": 18, "severity": "error",
+      "message": "\"16\" does not appear in ACH-001" }
+  ],
+  "claims": [
+    { "n": 0, "line": 7, "text": "...", "ev": ["ROLE-001"], "key": "<sha256>",
+      "verdict": "supported", "reason": "...", "verified_at": "..." },
+    { "n": 3, "line": 12, "text": "...", "ev": ["ACH-003"], "key": "<sha256>",
+      "verdict": "weakened", "reason": "...", "suggestion": "...", "verified_at": "..." }
+  ],
+  "render": {
+    "pdf_sha256": "<sha256 of cv.pdf>", "pages": 2, "max_pages": 2,
+    "rendered_at": "...", "theme": "classic",
+    "ats": { "coverage": 1, "missing": [], "garbled": 0 }
+  }
+}
+```
+
+- `checks`: the deterministic checks (`format`, `evidence`, `numbers`, `companies`, `titles`,
+  `dates`). Errors block G1. Numbers in a claim must appear in the cited entries (or their role or
+  project); entry headings must carry the cited role's title and company exactly, and only dates
+  the bank has; a company the bank knows may only be mentioned by a claim citing it.
+- `claims`: the faithfulness verifier's verdict per claim (`supported`, `weakened`, `unsupported`).
+  The verifier sees each claim and the full text of the entries it cites, never the posting or the
+  tailoring notes. `key` hashes the claim text and that evidence: an unchanged claim keeps its
+  verdict, so only changed claims are sent again.
+- `render`: the PDF written with this check, and the ATS round trip: the share of the CV's words
+  read back out of the PDF text, words that did not come back, and characters that came out as
+  private-use or replacement code points. Over the page limit, below 98% or any garbled character
+  is a warning.
+
+`engine` is null when every verdict was reused. `jobs/<id>/ai-log.jsonl` repeats the workspace
+`ai-log.jsonl` lines for that job (with `job` set), for the cost per job.
