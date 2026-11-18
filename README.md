@@ -2,7 +2,7 @@
 
 🐕 Hirehound: a local-first web app that sniffs out the right jobs and tailors your CV for each one, using only what you've actually done. Every claim is linked to your real experience, you approve every application, and you always press Submit. Powered by Claude.
 
-> **Status: early development.** Working today: the job pipeline (add jobs by link or text, Kanban and table, job dossier), onboarding (import your CVs, Claude drafts an evidence-linked experience bank you review, base CVs with PDF preview), the hero flow (evaluate a posting, tailor a CV from a base, blocking deterministic checks and a faithfulness verifier, side-by-side review and approval locked to the PDF's SHA-256), and applying: a manual checklist or assisted filling in a visible browser that never presses Submit, a verified cover letter, and a permanent record of what was sent. Discovery arrives in M5. See [the PRD](docs/PRD.md) for the full plan.
+> **Status: early development.** Working today: the job pipeline (add jobs by link or text, Kanban and table, job dossier), onboarding (import your CVs, Claude drafts an evidence-linked experience bank you review, base CVs with PDF preview), the hero flow (evaluate a posting, tailor a CV from a base, blocking deterministic checks and a faithfulness verifier, side-by-side review and approval locked to the PDF's SHA-256), applying (a manual checklist or assisted filling in a visible browser that never presses Submit, a verified cover letter, and a permanent record of what was sent), and discovery: scheduled scans of company job boards on Greenhouse, Lever and Ashby plus LinkedIn alert imports, filtered by your preferences, with duplicates, reposts and closed postings handled. Follow-ups and interview prep arrive in M6. See [the PRD](docs/PRD.md) for the full plan.
 
 ## Why
 
@@ -54,6 +54,16 @@ Onboarding and (later) evaluation and tailoring use Claude. In **Settings, AI en
 - **Claude Code**: uses your existing Claude Code login, if the `claude` command is installed.
 
 The default model is Claude Opus 5.5; each AI task's token use and estimated cost is logged to `ai-log.jsonl` in your workspace. PDFs are rendered by the Google Chrome or Microsoft Edge already installed on your computer.
+
+### Finding jobs
+
+In **Sources**, add the careers pages of companies you like that hire through Greenhouse, Lever or Ashby (paste a link such as `https://jobs.lever.co/acme`). Hirehound scans them every few hours while it is open and adds new postings as Found jobs, filtered by the words and locations you give and by your preferences. To scan while the app is closed, schedule this with cron or Task Scheduler:
+
+```bash
+node bin/hirehound.ts scan
+```
+
+LinkedIn job-alert emails can be dropped in as `.eml` files or pasted.
 
 ### Your data
 

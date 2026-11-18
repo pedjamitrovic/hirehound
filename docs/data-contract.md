@@ -43,6 +43,7 @@ port: 4280                         # optional
     imports/                      # copies of the files you imported          (M2)
     stories.md                    # STAR+R story bank                         (M6)
   sources/portals.yaml            # watched companies and boards              (M5)
+  sources/scans.jsonl             # one line per board per scan               (M5)
   prompts/                        # overrides of built-in prompts             (M2)
   templates/                      # overrides of CV / cover letter themes     (M2)
   ai-log.jsonl                    # one line per AI task: model, tokens, cost (M2)
@@ -261,6 +262,7 @@ YAML frontmatter plus the posting as readable text (headings as `##`, bullets as
 | `posted_at`, `valid_through` | date | when stated |
 | `fetched_at` | timestamp | required |
 | `text_sha256` | hex SHA-256 of the normalised body text | change and repost detection |
+| `repost_of` | job id | M5: an earlier, closed job for the same company and role |
 
 `posting.html` is the raw page exactly as fetched. It is untrusted third-party content: the app
 only ever serves it with `Content-Security-Policy: sandbox` and never renders it in its own origin.
@@ -292,6 +294,9 @@ application:                     # M4, or method: external from M1
   method: manual                 # manual | assisted | external
   cv_sha256: <64 hex>            # must equal approval.cv_sha256 unless external
   cover_letter_sha256: <64 hex>  # when the approved cover letter was sent too
+listing:                         # M5: written when the posting leaves its board or returns
+  live: false
+  since: 2026-11-18T22:02:00+01:00
 ```
 
 - `by` is `user`, `system` or `ai`. `reason` is required for `skipped`, `withdrawn` and external
@@ -417,6 +422,70 @@ Everything known about one exact version of `cv.md`:
 
 `engine` is null when every verdict was reused. `jobs/<id>/ai-log.jsonl` repeats the workspace
 `ai-log.jsonl` lines for that job (with `job` set), for the cost per job.
+
+## sources/portals.yaml (M5)
+
+The job boards Hirehound scans: companies' public boards on Greenhouse, Lever and Ashby, read
+through their public APIs (no login, no keys). Edited in Sources or by hand; comments are kept.
+
+```yaml
+version: 1
+schedule:
+  every_hours: 12               # while Hirehound is open; 0: manual scans only
+portals:
+  - id: acme                    # lowercase, unique
+    company: Acme Robotics
+    provider: greenhouse        # greenhouse | lever | ashby
+    board: acme                 # boards.greenhouse.io/<board>, jobs.lever.co/<board>, jobs.ashbyhq.com/<board>
+    region: global              # lever only: eu for jobs.eu.lever.co
+    titles: [engineering manager, platform]   # keep titles with any of these words (empty: all)
+    exclude_titles: [intern]
+    locations: [Berlin, Remote]               # keep these locations (empty: anywhere)
+    enabled: true
+```
+
+A scan adds each new posting once as a Found job (`source` is the provider, `source_ref` like
+`greenhouse:acme:4012345`, history `by: system`). What happens to each posting:
+
+- **Already known** (same `source_ref`, same link, same text, or an open job for the same company
+  and role): nothing, except that a job that had left its board and is listed again gets
+  `listing.live: true`.
+- **Filtered:** its title lacks the portal's `titles`, contains an `exclude_titles` word or one of
+  `roles.exclude_title_keywords` in your preferences; the company is in `company.exclude_companies`;
+  its location is not in the portal's `locations`; or it is on site or hybrid while you want remote
+  only. Unknown facts never filter. Filtered postings are listed in the scan with the reason and
+  can be added anyway.
+- **Added**, with `repost_of` when a closed job for the same company and role exists.
+
+After a board is read, jobs from it that it no longer lists get `listing: { live: false }`; Found
+and Evaluated ones also move to Expired (`by: system`, reason "No longer listed on the ... job
+board"). Later states are only flagged. A board that cannot be read, or suddenly lists nothing,
+changes nothing.
+
+`hirehound scan` runs one scan from an OS scheduler (cron, Task Scheduler) while the app is closed.
+
+## sources/scans.jsonl (M5)
+
+One JSON line per board per scan (and per LinkedIn alert import), appended:
+
+```json
+{"at":"2026-11-18T22:01:23+01:00","source":"acme","trigger":"scheduled","ok":true,"listed":6,
+ "added":[{"id":"2026-11-18_acme-robotics_staff-platform-engineer","title":"Staff Platform Engineer"}],
+ "duplicates":1,
+ "filtered":[{"ref":"greenhouse:acme:503","title":"Platform Engineering Intern","url":"...","location":"Berlin","reason":"The title contains \"intern\""}],
+ "gone":[{"id":"...","title":"...","expired":true}],"back":[]}
+```
+
+`trigger` is `manual`, `scheduled`, `cli` or `import`; a failed board has `ok: false` and `error`.
+
+## LinkedIn job alerts (M5)
+
+Sources accepts a LinkedIn job-alert email as an `.eml` file or pasted text. Each job card becomes
+a Found job with `source: linkedin-email` and `source_ref: linkedin:<id>`. Hirehound fetches each
+public job page once with an ordinary request (at most 25 per alert); when LinkedIn refuses, as it
+often does for signed-out visitors, the job keeps the alert's details and an empty posting body,
+and asks you to paste the text before it can be evaluated. It never signs in or works around a
+refusal.
 
 ## cover-letter.md (M4)
 
