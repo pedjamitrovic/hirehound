@@ -2,7 +2,7 @@
 
 🐕 Hirehound: a local-first web app that sniffs out the right jobs and tailors your CV for each one, using only what you've actually done. Every claim is linked to your real experience, you approve every application, and you always press Submit. Powered by Claude.
 
-> **Status: early development.** Working today: the job pipeline (add jobs by link or text, Kanban and table, job dossier) and onboarding (import your CVs, Claude drafts an evidence-linked experience bank you review, base CVs with PDF preview). Evaluation, tailoring with verification, and applying arrive in M3 and M4. See [the PRD](docs/PRD.md) for the full plan.
+> **Status: early development.** Working today: the job pipeline (add jobs by link or text, Kanban and table, job dossier), onboarding (import your CVs, Claude drafts an evidence-linked experience bank you review, base CVs with PDF preview), and the hero flow: evaluate a posting, tailor a CV from a base, blocking deterministic checks and a faithfulness verifier, side-by-side review and approval locked to the PDF's SHA-256. Applying and cover letters arrive in M4. See [the PRD](docs/PRD.md) for the full plan.
 
 ## Why
 
@@ -21,8 +21,8 @@ It is web-first: comparing jobs, reviewing a CV diff and editing your experience
 | Pipeline | Add jobs by URL or text, Kanban board and dense table, job dossier, state machine | M1 |
 | Profile | Import existing CVs (.md, .txt, .pdf, .docx, LinkedIn export), experience bank, multiple base CVs | M2 |
 | Evaluate | Role summary, weighted requirement matrix with evidence, fit score, comp, work authorisation, legitimacy | M3 |
-| Tailor and verify | Evidence-linked tailoring, blocking checks and verifier, side-by-side review, PDF export | M3 |
-| Apply | Manual checklist or assisted form filling in a visible browser, reusable answers | M4 |
+| Tailor and verify | Evidence-linked tailoring, blocking checks and verifier, side-by-side review, PDF export with an ATS read-back check, approval locked to the PDF | M3 |
+| Apply | Manual checklist or assisted form filling in a visible browser, reusable answers, optional cover letter | M4 |
 | Discover | Greenhouse, Lever and Ashby boards, LinkedIn alert import, dedupe, liveness, scheduled scans | M5 |
 | Follow up | Follow-up reminders, reply classification, interview prep and debriefs, funnel insights | M6 |
 

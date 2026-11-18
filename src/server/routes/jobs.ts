@@ -2,14 +2,17 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import {
+  ApproveBody,
   BulkTransitionBody,
   ContactBody,
   CreateJobRequest,
+  CvSaveBody,
   type DuplicateHint,
   type JobDetail,
   NoteBody,
   type PostingDraft,
   PreviewRequest,
+  TailorBody,
   TransitionBody,
 } from "../../shared/schemas/api.ts";
 import type { AppContext } from "../app-context.ts";
@@ -31,6 +34,7 @@ export function toJobDetail(record: JobRecord): JobDetail {
     diagnostics: record.diagnostics,
     transitions: record.summary.transitions,
     hasRawHtml: record.hasRawHtml,
+    usage: record.usage,
   };
 }
 
@@ -157,6 +161,55 @@ export function jobRoutes(router: Router, app: AppContext): void {
     const record = requireJob(app, params.id);
     app.openFolder(jobDir(app.root, record.id));
     return undefined;
+  });
+
+  // ---------- M3: evaluate, tailor, check, review, approve ----------
+
+  router.post("/api/jobs/:id/evaluate", ({ params }) => {
+    const record = requireJob(app, params.id);
+    return new Reply(202, app.flow.startEvaluate(record.id));
+  });
+
+  router.get("/api/jobs/:id/evaluation", ({ params }) =>
+    app.flow.evaluationView(requireJob(app, params.id).id),
+  );
+
+  router.post("/api/jobs/:id/tailor", async ({ params, body }) => {
+    const input = await body(TailorBody);
+    const record = requireJob(app, params.id);
+    return new Reply(202, app.flow.startTailor(record.id, input));
+  });
+
+  router.get("/api/jobs/:id/cv", ({ params }) => app.flow.cvView(requireJob(app, params.id).id));
+
+  router.put("/api/jobs/:id/cv", async ({ params, body }) => {
+    const { text, expectedSha256 } = await body(CvSaveBody);
+    const record = requireJob(app, params.id);
+    return new Reply(202, await app.flow.saveCv(record.id, text, expectedSha256));
+  });
+
+  router.post("/api/jobs/:id/cv/check", ({ params }) => {
+    const record = requireJob(app, params.id);
+    return new Reply(202, app.flow.startCheck(record.id));
+  });
+
+  router.get("/api/jobs/:id/cv.pdf", async ({ params, res }) => {
+    const record = requireJob(app, params.id);
+    const pdf = await app.flow.cvPdf(record.id);
+    res.writeHead(200, {
+      "content-type": "application/pdf",
+      "content-length": pdf.byteLength,
+      "content-disposition": `inline; filename="${record.id}.pdf"`,
+      "cache-control": "no-store",
+    });
+    res.end(pdf);
+    return HANDLED;
+  });
+
+  router.post("/api/jobs/:id/approve", async ({ params, body }) => {
+    const { overrideReason } = await body(ApproveBody);
+    const record = requireJob(app, params.id);
+    return toJobDetail(await app.flow.approve(record.id, overrideReason));
   });
 
   router.get("/api/jobs/:id/raw/posting.html", async ({ params, res }) => {

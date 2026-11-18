@@ -17,7 +17,8 @@ src/server/
   http/                      router, Host/Origin guard, SSE hub, static files
   routes/                    one module per resource
   workspace/                 init, atomic file IO, YAML diagnostics, index, watcher, git check
-  jobs/                      job creation, posting snapshot and extraction, transitions (M1)
+  jobs/                      job creation, posting snapshot and extraction, transitions (M1);
+                             evaluate, tailor, verify tasks and the review/approve flow (M3)
   ai/                        engine adapter (Anthropic API, Claude Code), runTask, prompts/
   onboarding/                AI task definitions and the onboarding flow
   profile/                   profile files, experience bank ops, base CVs, imports
@@ -72,6 +73,33 @@ The server can read and write personal files, so:
   app's origin;
 - API keys are read from the environment or a user-only config file outside the workspace (M2) and
   are never written into the workspace.
+
+## Evaluate, tailor, verify, approve (M3)
+
+`src/server/jobs/flow.ts` (`JobFlow`) runs the hero flow for one job; each AI step is a background
+task, one per job at a time, and the task runner works on at most three tasks at once.
+
+1. **Evaluate** (`evaluate` task): posting + preferences + confirmed bank + base CV list in; blocks
+   A-G out. `postCheck` rejects unknown or unconfirmed evidence ids, a `jd-wording` requirement
+   without its quote and a base id that does not exist. Code computes the score
+   (`src/shared/score.ts`) and writes `evaluation.md`.
+2. **Tailor** (`tailor` task): posting, the evaluation's requirements, the base CV and the confirmed
+   bank in; a CV body plus reasons out. `postCheck` runs the dialect parser and the deterministic
+   checks, so the model gets one repair round with the exact problems. The task is lenient: a CV that
+   still fails is written anyway, and the checks then block it in the review where the user can fix it.
+3. **Check** (no model unless claims changed): `src/shared/cv/checks.ts` runs the deterministic
+   checks; claims whose key (text plus cited evidence) has no verdict yet go to the `verify` task,
+   which sees only claims and their cited entries; the PDF is rendered and read back with
+   `src/server/pdf/text.ts` (a small reader for Chrome's PDFs: objects, Flate streams, ToUnicode
+   maps, Tj/TJ) for the ATS round trip. Everything lands in `verification.json`, and the job moves
+   between `tailoring` and `ready` to match guard G1.
+4. **Approve**: the review recomputes everything from the files, refuses when anything blocks, asks
+   for a reason below the score threshold, and `JobService.approve` re-checks G2 inside the job's lock
+   before recording the PDF's SHA-256.
+
+The review screen (`src/web/screens/job/CvTab.tsx`) works from `GET /api/jobs/:id/cv`, which
+returns the CV as rows (sections, claims with diff state, verdicts, check issues, removed base
+claims), the evidence for chips, the render and the list of blockers.
 
 ## AI engine adapter
 

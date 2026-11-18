@@ -245,6 +245,8 @@ export function applyTransition<T extends StatusFile>(
   if (req.method === "external") {
     next.application = { at: meta.at, method: "external" };
   }
+  // Revoking an approval (approved -> ready) removes it; the history keeps the record.
+  if (status.state === "approved" && req.to === "ready") delete next.approval;
   return next;
 }
 

@@ -21,7 +21,7 @@ Press `?` anywhere to see the shortcuts that are active on the current screen.
 | Everywhere | `/` search jobs, `?` shortcut sheet, `n` add a job, `g t` Today, `g p` Pipeline, `g s` Settings |
 | Pipeline | `b` / `t` board or table, `j` / `k` (or arrows) select, `h` / `l` change column, `Enter` open, `x` select for bulk, `m` move to..., `[` / `]` move back or forward, `s` skip |
 | Job dossier | `1`-`7` switch tab, `m` move to..., `n` add note, `o` open original posting, `Esc` back to pipeline |
-| CV review (M3) | `j` / `k` previous or next job, `a` approve, `r` request changes, `e` edit, `b` switch base, `s` skip |
+| CV review (M3) | `j` / `k` next or previous job in Ready, `a` approve, `r` request changes, `e` edit, `b` switch base, `s` skip, `d` diff on or off; in the editor `mod+Enter` saves and checks, `Esc` cancels |
 
 ## Wireframes (low fidelity)
 
@@ -109,7 +109,14 @@ Keys: 1-7 switch tab . M move . N note . O open original
 
 Raw `posting.html` is untrusted third-party HTML: it is only ever shown in a sandboxed iframe served with `Content-Security-Policy: sandbox`, never inside the app origin. In M1, tabs other than Posting and Timeline show an empty state that says which milestone fills them.
 
-### CV review (M3, designed now so the data model supports it)
+### CV review (M3)
+
+Built as designed below, in the CV tab of the dossier (the side panel steps aside for it). The
+middle column shows the CV as claims rather than a rendered page: each with its diff marker, evidence
+chips (hover for the full bank entry) and the verifier's verdict; weakened and unsupported claims open
+with the reason and a supported rewrite ("Use this wording"). Clicking a requirement on the left
+highlights the claims citing its evidence. The bar at the bottom shows every check and says why
+Approve is blocked.
 
 ```
 Review 1/3   Acme . Engineering Manager, Platform   87 strong   EM base          J/K prev/next job

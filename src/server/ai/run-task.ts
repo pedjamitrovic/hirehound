@@ -23,6 +23,16 @@ export type TaskDef<I, O> = {
   render(input: I): { input: string; attachments?: Attachment[] };
   /** Deterministic checks on top of the schema; problems trigger one repair attempt. */
   postCheck?(output: O, input: I): string[];
+  /**
+   * When the repair attempt still fails postCheck, return it with its problems instead of failing.
+   * For outputs the user reviews and fixes anyway (a tailored CV whose checks then block it).
+   */
+  lenient?: boolean;
+};
+
+export type TaskResult<O> = AiResult<O> & {
+  /** postCheck problems left after the repair attempt (only for lenient tasks). */
+  problems: string[];
 };
 
 const BUILT_IN_PROMPTS = new URL("./prompts/", import.meta.url);
@@ -46,13 +56,15 @@ export async function loadPrompt(
 export type TaskRunOptions = {
   /** Workspace root: prompt overrides and the usage log live here. */
   root: string;
+  /** Job id: usage is also logged to jobs/<id>/ai-log.jsonl, for the per-job cost. */
+  jobId?: string;
   signal?: AbortSignal;
   onProgress?: (progress: AiProgress) => void;
 };
 
-async function logUsage(root: string, entry: Record<string, unknown>): Promise<void> {
+async function logUsage(file: string, entry: Record<string, unknown>): Promise<void> {
   try {
-    await appendFile(join(root, "ai-log.jsonl"), `${JSON.stringify(entry)}\n`);
+    await appendFile(file, `${JSON.stringify(entry)}\n`);
   } catch {
     // The log is informational; never fail a task because of it.
   }
@@ -68,7 +80,7 @@ export async function runTask<I, O>(
   def: TaskDef<I, O>,
   input: I,
   options: TaskRunOptions,
-): Promise<AiResult<O>> {
+): Promise<TaskResult<O>> {
   const engine = ai.engine();
   const model = ai.model();
   const prompt = await loadPrompt(options.root, def.name);
@@ -97,9 +109,10 @@ export async function runTask<I, O>(
     });
 
   const finish = async (ok: boolean, servedBy: string, error?: string) => {
-    await logUsage(options.root, {
+    const entry = {
       at: localIsoDateTime(),
       task: def.name,
+      ...(options.jobId ? { job: options.jobId } : {}),
       engine: engine.id,
       model: servedBy,
       ok,
@@ -110,7 +123,11 @@ export async function runTask<I, O>(
       cost_usd: usage.costUsd,
       duration_ms: Date.now() - started,
       ...(error ? { error } : {}),
-    });
+    };
+    await logUsage(join(options.root, "ai-log.jsonl"), entry);
+    if (options.jobId) {
+      await logUsage(join(options.root, "jobs", options.jobId, "ai-log.jsonl"), entry);
+    }
   };
 
   let problems: string[] = [];
@@ -123,9 +140,9 @@ export async function runTask<I, O>(
       const result = await attempt(extra);
       usage = addUsage(usage, result.usage);
       problems = def.postCheck?.(result.output, input) ?? [];
-      if (problems.length === 0) {
+      if (problems.length === 0 || (def.lenient && round === 2)) {
         await finish(true, result.model);
-        return { ...result, usage, durationMs: Date.now() - started };
+        return { ...result, usage, durationMs: Date.now() - started, problems };
       }
       options.onProgress?.({
         type: "retry",

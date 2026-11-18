@@ -68,12 +68,22 @@ export class JobService {
     await writeFileAtomic(join(jobDir(this.#app.root, id), JOB_FILES.status), toYaml(status));
   }
 
-  async #updateStatus(id: string, update: (status: StatusFile) => StatusFile): Promise<JobRecord> {
+  async #updateStatus(
+    id: string,
+    update: (status: StatusFile) => StatusFile | Promise<StatusFile>,
+  ): Promise<JobRecord> {
     return this.#withLock(id, async () => {
-      const next = update(await this.#readStatus(id));
-      await this.#writeStatus(id, next);
+      const current = await this.#readStatus(id);
+      const next = await update(current);
+      // Returning the same object means "no change": nothing is written.
+      if (next !== current) await this.#writeStatus(id, next);
       return this.#reload(id);
     });
+  }
+
+  /** Runs `task` while holding the job's lock, so no status change interleaves with it. */
+  locked<T>(id: string, task: () => Promise<T>): Promise<T> {
+    return this.#withLock(id, task);
   }
 
   async create(input: CreateInput, snapshot?: Snapshot): Promise<JobRecord> {
@@ -142,8 +152,8 @@ export class JobService {
     req: TransitionRequest,
     by: StatusEvent["by"] = "user",
   ): Promise<JobRecord> {
-    return this.#updateStatus(id, (status) => {
-      const check = checkTransition(status, req, guardContextFor(this.#app.root, id));
+    return this.#updateStatus(id, async (status) => {
+      const check = checkTransition(status, req, await guardContextFor(this.#app.root, id));
       if (!check.ok) {
         throw new HttpError(
           check.code === "reason-required" ? 400 : 409,
@@ -152,6 +162,61 @@ export class JobService {
         );
       }
       return applyTransition(status, req, { at: localIsoDateTime(), by });
+    });
+  }
+
+  /** Moves the job only if it is in `from`; used for automatic moves (by the system). */
+  async moveIf(id: string, from: StatusFile["state"][], to: StatusFile["state"]): Promise<boolean> {
+    try {
+      let moved = false;
+      await this.#updateStatus(id, async (status) => {
+        if (!from.includes(status.state)) return status;
+        const check = checkTransition(status, { to }, await guardContextFor(this.#app.root, id));
+        if (!check.ok) return status;
+        moved = true;
+        return applyTransition(status, { to }, { at: localIsoDateTime(), by: "system" });
+      });
+      return moved;
+    } catch {
+      return false;
+    }
+  }
+
+  setBase(id: string, base: string): Promise<JobRecord> {
+    return this.#updateStatus(id, (status) => ({ ...status, base }));
+  }
+
+  /**
+   * Approves the tailored CV: records the SHA-256 of the exact cv.pdf and moves ready -> approved.
+   * Guard G2 is checked against the files on disk inside the job's lock.
+   */
+  approve(
+    id: string,
+    approval: { cvSha256: string; base: string; overrideReason?: string | undefined },
+  ): Promise<JobRecord> {
+    return this.#updateStatus(id, async (status) => {
+      const ctx = await guardContextFor(this.#app.root, id);
+      if (ctx.cvPdfSha256 !== approval.cvSha256) {
+        throw new HttpError(
+          409,
+          "changed-on-disk",
+          "cv.pdf changed while you were reviewing it. Look at it again before approving.",
+        );
+      }
+      const check = checkTransition(status, { to: "approved" }, ctx);
+      if (!check.ok) throw new HttpError(409, check.code, check.message);
+      const at = localIsoDateTime();
+      const next = applyTransition(status, { to: "approved" }, { at, by: "user" });
+      return {
+        ...next,
+        base: approval.base,
+        approval: {
+          at,
+          cv_sha256: approval.cvSha256,
+          base: approval.base,
+          ...(approval.overrideReason ? { override_reason: approval.overrideReason } : {}),
+        },
+      };
     });
   }
 

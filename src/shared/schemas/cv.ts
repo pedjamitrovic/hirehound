@@ -29,5 +29,7 @@ export const TailoredCvFrontmatter = z.object({
   generated_at: IsoDateTime,
   engine: z.object({ id: z.string(), model: z.string() }),
   theme: CvTheme.default("classic"),
+  /** What the tailoring emphasised and left out, for the review. */
+  notes: z.string().optional(),
 });
 export type TailoredCvFrontmatter = z.infer<typeof TailoredCvFrontmatter>;

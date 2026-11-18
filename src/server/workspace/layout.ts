@@ -28,6 +28,13 @@ export const JOB_FILES = {
   posting: "posting.md",
   postingHtml: "posting.html",
   status: "status.yaml",
+  evaluation: "evaluation.md",
+  cvBase: "cv.base.md",
+  cv: "cv.md",
+  changes: "changes.md",
+  verification: "verification.json",
+  cvPdf: "cv.pdf",
+  aiLog: "ai-log.jsonl",
 } as const;
 
 export function jobDir(root: string, id: string): string {
