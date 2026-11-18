@@ -1,14 +1,15 @@
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { z } from "zod";
-import { joinFrontmatter, toYaml } from "../../shared/frontmatter.ts";
+import { joinFrontmatter, splitFrontmatter, toYaml } from "../../shared/frontmatter.ts";
 import type { BulkTransitionResult, CreateJobRequest } from "../../shared/schemas/api.ts";
-import type { PostingFrontmatter } from "../../shared/schemas/posting.ts";
+import { PostingFrontmatter } from "../../shared/schemas/posting.ts";
 import { type Person, type StatusEvent, StatusFile } from "../../shared/schemas/status.ts";
 import { jobIdFor } from "../../shared/slug.ts";
 import { applyTransition, checkTransition, type TransitionRequest } from "../../shared/states.ts";
 import { localIsoDate, localIsoDateTime } from "../../shared/time.ts";
 import type { AppContext } from "../app-context.ts";
+import type { DiscoveredPosting } from "../discovery/ats.ts";
 import { HttpError } from "../http/router.ts";
 import { errorCode, readTextFile, writeFileAtomic } from "../workspace/fsx.ts";
 import {
@@ -91,21 +92,134 @@ export class JobService {
     return this.#withLock(id, task);
   }
 
-  async create(input: CreateInput, snapshot?: Snapshot): Promise<JobRecord> {
-    const now = new Date();
-    const jobsRoot = join(this.#app.root, JOBS_DIR);
-    await mkdir(jobsRoot, { recursive: true });
-
-    let id = "";
+  /** Creates the job's folder under a fresh id; the id never changes afterwards. */
+  async #allocate(company: string, title: string, now: Date): Promise<string> {
+    await mkdir(join(this.#app.root, JOBS_DIR), { recursive: true });
     for (let attempt = 1; ; attempt++) {
-      id = jobIdFor(localIsoDate(now), input.company, input.title, attempt);
+      const id = jobIdFor(localIsoDate(now), company, title, attempt);
       try {
         await mkdir(jobDir(this.#app.root, id));
-        break;
+        return id;
       } catch (error) {
         if (errorCode(error) !== "EEXIST" || attempt >= 99) throw error;
       }
     }
+  }
+
+  async #writeNew(
+    id: string,
+    files: { posting: PostingFrontmatter; body: string; status: StatusFile; html?: string },
+  ): Promise<JobRecord> {
+    const dir = jobDir(this.#app.root, id);
+    try {
+      if (files.html) await writeFileAtomic(join(dir, JOB_FILES.postingHtml), files.html);
+      await writeFileAtomic(
+        join(dir, JOB_FILES.posting),
+        joinFrontmatter(files.posting, files.body),
+      );
+      await writeFileAtomic(join(dir, JOB_FILES.status), toYaml(files.status));
+    } catch (error) {
+      // Never leave a half-created job behind.
+      await rm(dir, { recursive: true, force: true });
+      throw error;
+    }
+    return this.#reload(id);
+  }
+
+  /** M5: a Found job from a job board or an alert. Recorded as added by the system. */
+  async createDiscovered(
+    posting: DiscoveredPosting,
+    options: {
+      repostOf?: string | undefined;
+      html?: string | undefined;
+      text?: string | undefined;
+    } = {},
+  ): Promise<JobRecord> {
+    const now = new Date();
+    const id = await this.#allocate(posting.company, posting.title, now);
+    const at = localIsoDateTime(now);
+    const body = normalizePostingText(options.text ?? posting.text);
+    const frontmatter: PostingFrontmatter = {
+      version: 1,
+      company: posting.company,
+      title: posting.title,
+      url: posting.url,
+      source: posting.provider,
+      source_ref: posting.sourceRef,
+      ...(posting.location ? { location: posting.location } : {}),
+      workplace: posting.workplace,
+      employment_type: posting.employmentType,
+      ...(posting.salary ? { salary: posting.salary } : {}),
+      ...(posting.postedAt ? { posted_at: posting.postedAt } : {}),
+      fetched_at: at,
+      text_sha256: textSha256(body),
+      ...(options.repostOf ? { repost_of: options.repostOf } : {}),
+    };
+    return this.#writeNew(id, {
+      posting: frontmatter,
+      body,
+      status: {
+        version: 1,
+        state: "found",
+        history: [{ at, from: null, to: "found", by: "system" }],
+        notes: [],
+        contacts: [],
+        tags: [],
+        listing: { live: true, since: at },
+      },
+      ...(options.html ? { html: options.html } : {}),
+    });
+  }
+
+  /**
+   * M5: the posting left its board (or came back). Recorded only when it changes. A job you have
+   * not acted on yet (Found, Evaluated) is expired by the system; later states are only flagged.
+   */
+  setListing(
+    id: string,
+    live: boolean,
+    reason: string,
+  ): Promise<{ record: JobRecord; expired: boolean }> {
+    let expired = false;
+    return this.#updateStatus(id, (status) => {
+      if ((status.listing?.live ?? true) === live && status.listing) return status;
+      const at = localIsoDateTime();
+      let next: StatusFile = { ...status, listing: { live, since: at } };
+      if (!live && (status.state === "found" || status.state === "evaluated")) {
+        next = applyTransition(next, { to: "expired", reason }, { at, by: "system" });
+        expired = true;
+      }
+      return next;
+    }).then((record) => ({ record, expired }));
+  }
+
+  /** Replaces the posting text (for postings imported without it, such as LinkedIn alerts). */
+  setPostingText(id: string, text: string): Promise<JobRecord> {
+    return this.#withLock(id, async () => {
+      const path = join(jobDir(this.#app.root, id), JOB_FILES.posting);
+      const current = await readTextFile(path);
+      if (current === null) throw new HttpError(409, "posting-missing", "posting.md is missing.");
+      const split = splitFrontmatter(current);
+      const parsed = split.yaml
+        ? parseYaml(split.yaml, PostingFrontmatter, { file: "posting.md" }).value
+        : null;
+      if (!parsed)
+        throw new HttpError(409, "posting-invalid", "posting.md has errors. Fix the file first.");
+      const body = normalizePostingText(text);
+      await writeFileAtomic(
+        path,
+        joinFrontmatter(
+          { ...parsed, text_sha256: textSha256(body), fetched_at: localIsoDateTime() },
+          body,
+        ),
+      );
+      return this.#reload(id);
+    });
+  }
+
+  async create(input: CreateInput, snapshot?: Snapshot): Promise<JobRecord> {
+    const now = new Date();
+    const id = await this.#allocate(input.company, input.title, now);
 
     const at = localIsoDateTime(now);
     const body = normalizePostingText(input.kind === "text" ? input.text : (snapshot?.text ?? ""));
@@ -138,18 +252,12 @@ export class JobService {
       contacts: [],
       tags: [],
     };
-
-    const dir = jobDir(this.#app.root, id);
-    try {
-      if (snapshot) await writeFileAtomic(join(dir, JOB_FILES.postingHtml), snapshot.html);
-      await writeFileAtomic(join(dir, JOB_FILES.posting), joinFrontmatter(frontmatter, body));
-      await writeFileAtomic(join(dir, JOB_FILES.status), toYaml(status));
-    } catch (error) {
-      // Never leave a half-created job behind.
-      await rm(dir, { recursive: true, force: true });
-      throw error;
-    }
-    return this.#reload(id);
+    return this.#writeNew(id, {
+      posting: frontmatter,
+      body,
+      status,
+      ...(snapshot ? { html: snapshot.html } : {}),
+    });
   }
 
   async transition(

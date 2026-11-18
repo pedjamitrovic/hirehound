@@ -84,6 +84,12 @@ export const Application = z.object({
   cover_letter_sha256: Sha256.optional(),
 });
 
+/** M5: whether the posting is still on its job board, recorded when that changes. */
+export const Listing = z.object({
+  live: z.boolean(),
+  since: IsoDateTime,
+});
+
 export const StatusFile = z.object({
   version: Version,
   /** Authoritative; should equal the last history entry's `to`. */
@@ -97,6 +103,7 @@ export const StatusFile = z.object({
   approval: Approval.optional(),
   cover_letter_approval: CoverLetterApproval.optional(),
   application: Application.optional(),
+  listing: Listing.optional(),
 });
 
 export type Actor = z.infer<typeof Actor>;
@@ -108,4 +115,5 @@ export type Approval = z.infer<typeof Approval>;
 export type CoverLetterApproval = z.infer<typeof CoverLetterApproval>;
 export type ApplyMethod = z.infer<typeof ApplyMethod>;
 export type Application = z.infer<typeof Application>;
+export type Listing = z.infer<typeof Listing>;
 export type StatusFile = z.infer<typeof StatusFile>;

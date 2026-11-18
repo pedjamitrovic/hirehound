@@ -327,6 +327,8 @@ export async function readJob(root: string, id: string): Promise<JobRecord | nul
     score: score?.score ?? null,
     band: score?.band ?? null,
     recommendation: evaluation?.recommendation.verdict ?? null,
+    listed: status?.listing ? status.listing.live : null,
+    repostOf: posting?.repost_of ?? null,
     base: status?.base ?? null,
     tags: status?.tags ?? [],
     addedAt,

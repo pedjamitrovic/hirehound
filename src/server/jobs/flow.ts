@@ -182,6 +182,13 @@ export class JobFlow {
         "posting.md is missing or has errors. Fix it first.",
       );
     }
+    if (!record.postingBody.trim()) {
+      throw new HttpError(
+        409,
+        "no-posting-text",
+        "The posting has no text yet. Paste it in the Posting tab, then evaluate.",
+      );
+    }
     if (record.status && !isPreApply(record.status.state)) {
       throw new HttpError(409, "past-evaluation", "This job has been applied to already.");
     }
