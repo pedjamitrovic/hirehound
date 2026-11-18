@@ -68,11 +68,14 @@ export type WorkspaceInfo = {
   path: string;
   appVersion: string;
   profile: {
+    /** Changes whenever any profile file changes; editors reload on it. */
+    revision: string;
     contact: ProfileFileState;
     preferences: ProfileFileState;
     answers: ProfileFileState;
     contactName: string | null;
     bases: string[];
+    bank: { state: ProfileFileState; entries: number; confirmed: number };
   };
   git: GitInfo | null;
   diagnostics: Diagnostic[];
@@ -80,8 +83,77 @@ export type WorkspaceInfo = {
   jobCount: number;
 };
 
+export type AiSettings = {
+  engine: "anthropic-api" | "claude-code";
+  model: string;
+  /** Never the key itself: only whether one is set and where it comes from. */
+  apiKey: { present: boolean; source: "env" | "file" | null };
+};
+
+/** A background job (AI task, PDF render) reported to every open tab. */
+export type TaskInfo = {
+  id: string;
+  kind: string;
+  label: string;
+  state: "running" | "done" | "failed";
+  startedAt: string;
+  finishedAt?: string;
+  /** Latest progress line, e.g. "Reading 3 files" or "Writing (1.2k tokens)". */
+  progress?: string;
+  error?: string;
+  usage?: { inputTokens: number; outputTokens: number; costUsd: number | null };
+  /** Small, task-specific result for the UI (ids created, file written). */
+  result?: unknown;
+};
+
+/** A profile YAML file as the editor needs it: value, version for safe saves, problems. */
+export type ProfileFile<T> = {
+  value: T | null;
+  /** The file exists but has no content yet (missing or commented-out template). */
+  empty: boolean;
+  /** SHA-256 of the file as read; send it back when saving so a newer edit is never overwritten. */
+  sha256: string | null;
+  diagnostics: Diagnostic[];
+};
+
+export type BaseSummary = {
+  id: string;
+  label: string;
+  track: "management" | "ic" | null;
+  theme: "classic" | "modern";
+  headline: string | null;
+  errors: number;
+  warnings: number;
+  updatedAt: string;
+};
+
+export type CvIssue = { line: number; col: number; severity: "error" | "warning"; message: string };
+
+export type BaseDetail = {
+  summary: BaseSummary;
+  text: string;
+  sha256: string;
+  issues: CvIssue[];
+  /** Evidence ids cited by the CV, with a label for chips. */
+  evidence: { id: string; label: string; confirmed: boolean }[];
+};
+
+export type ImportInfo = {
+  /** File name inside profile/imports. */
+  name: string;
+  kind: "text" | "pdf" | "unsupported";
+  origin: string;
+  size: number;
+  /** Characters of extracted text (text kinds). */
+  chars: number | null;
+  error: string | null;
+};
+
+export type ProfileFileSave<T> = { value: T; expectedSha256: string | null };
+
 export type ServerEvent =
   | { type: "hello"; appVersion: string }
+  | { type: "task"; task: TaskInfo }
   | { type: "job-upsert"; job: JobSummary }
   | { type: "job-remove"; id: string }
   | { type: "workspace"; info: WorkspaceInfo };

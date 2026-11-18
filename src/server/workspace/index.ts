@@ -1,6 +1,7 @@
-import { readdir } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { z } from "zod";
+import { bankStats } from "../../shared/bank.ts";
 import { AnswersFile } from "../../shared/schemas/answers.ts";
 import type {
   Diagnostic,
@@ -10,6 +11,7 @@ import type {
   ServerEvent,
   WorkspaceInfo,
 } from "../../shared/schemas/api.ts";
+import { BankFile } from "../../shared/schemas/bank.ts";
 import { Contact } from "../../shared/schemas/contact.ts";
 import { Preferences } from "../../shared/schemas/preferences.ts";
 import { WorkspaceManifest } from "../../shared/schemas/workspace.ts";
@@ -21,11 +23,13 @@ import { BASES_DIR, MANIFEST_FILE, PROFILE_FILES } from "./layout.ts";
 import { parseYaml } from "./yamlfile.ts";
 
 type Profile = {
+  revision: string;
   contact: ProfileFileState;
   preferences: ProfileFileState;
   answers: ProfileFileState;
   contactName: string | null;
   bases: string[];
+  bank: WorkspaceInfo["profile"]["bank"];
   diagnostics: Diagnostic[];
 };
 
@@ -41,11 +45,13 @@ export class WorkspaceIndex {
   #jobs = new Map<string, JobRecord>();
   #folderDiagnostics: Diagnostic[] = [];
   #profile: Profile = {
+    revision: "",
     contact: "missing",
     preferences: "missing",
     answers: "missing",
     contactName: null,
     bases: [],
+    bank: { state: "missing", entries: 0, confirmed: 0 },
     diagnostics: [],
   };
   #git: GitInfo | null = null;
@@ -150,6 +156,8 @@ export class WorkspaceIndex {
     const contact = await load(PROFILE_FILES.contact, Contact);
     const preferences = await load(PROFILE_FILES.preferences, Preferences);
     const answers = await load(PROFILE_FILES.answers, AnswersFile);
+    const bank = await load(PROFILE_FILES.bank, BankFile);
+    const stats = bank.value ? bankStats(bank.value) : null;
 
     let bases: string[] = [];
     try {
@@ -161,12 +169,28 @@ export class WorkspaceIndex {
       if (!isNotFound(error)) throw error;
     }
 
+    // Changes whenever any profile file changes on disk, so open editors know to reload.
+    const revision: string[] = [];
+    for (const rel of [
+      ...Object.values(PROFILE_FILES),
+      ...bases.map((b) => `${BASES_DIR}/${b}.md`),
+    ]) {
+      try {
+        const info = await stat(join(this.root, rel));
+        revision.push(`${rel}:${info.mtimeMs}:${info.size}`);
+      } catch (error) {
+        if (!isNotFound(error)) throw error;
+      }
+    }
+
     this.#profile = {
+      revision: revision.join("|"),
       contact: contact.state,
       preferences: preferences.state,
       answers: answers.state,
       contactName: contact.value?.name ?? null,
       bases,
+      bank: { state: bank.state, entries: stats?.total ?? 0, confirmed: stats?.confirmed ?? 0 },
       diagnostics,
     };
   }
