@@ -3,11 +3,13 @@
 import { z } from "zod";
 import type { CheckId, CheckIssue } from "../cv/checks.ts";
 import type { Inline } from "../cv/types.ts";
+import { COVER_LETTER_ANGLES } from "../enums.ts";
 import type { ScoreResult } from "../score.ts";
 import type { TransitionOption } from "../states.ts";
 import type { Answer } from "./answers.ts";
 import type { AnswerSource, ApplicationFile, UsedAnswer } from "./application.ts";
 import { BaseId, JobId, type SalaryRange } from "./common.ts";
+import type { CoverLetterAngle } from "./cv.ts";
 import type { EvaluationFrontmatter, ScoreBand } from "./evaluation.ts";
 import {
   EmploymentType,
@@ -340,6 +342,33 @@ export const ApproveBody = z.object({
   /** Required when the fit score is below the threshold. */
   overrideReason: z.string().trim().max(2000).optional(),
 });
+
+// ---------- M4: cover letter ----------
+
+export type CoverLetterView = {
+  text: string;
+  sha256: string;
+  angle: CoverLetterAngle | null;
+  greeting: string | null;
+  closing: string | null;
+  generatedAt: string | null;
+  notes: string | null;
+  rows: CvRow[];
+  checks: { issues: CheckIssue[]; errors: Record<CheckId, number> };
+  verification: CvView["verification"];
+  render: CvView["render"];
+  evidence: Record<string, EvidenceInfo>;
+  /** current: the approval still matches cover-letter.pdf. */
+  approval: { at: string; sha256: string; current: boolean } | null;
+  approve: { allowed: boolean; blockers: string[] };
+  policy: "always" | "when-requested" | "never";
+};
+
+export const CoverLetterBody = z.object({
+  angle: z.enum(COVER_LETTER_ANGLES).default("fit"),
+  feedback: z.string().trim().min(1, "Say what should change").max(4000).optional(),
+});
+export type CoverLetterBody = z.input<typeof CoverLetterBody>;
 
 // ---------- M4: apply ----------
 

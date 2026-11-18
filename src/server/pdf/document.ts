@@ -81,6 +81,30 @@ export type CvDocumentInput = {
   paper: Paper;
 };
 
+export type LetterDocumentInput = CvDocumentInput & {
+  greeting: string;
+  closing: string;
+  company: string;
+  /** Already formatted for the letter, e.g. "18 November 2026". */
+  date: string;
+};
+
+/** A cover letter with the same header and theme as the CV. */
+export async function letterDocumentHtml(input: LetterDocumentInput): Promise<string> {
+  const name = input.contact?.name ?? "";
+  const body = [
+    `<p class="letter-date">${escapeHtml(input.date)}</p>`,
+    `<p class="letter-to">${escapeHtml(input.company)}</p>`,
+    `<p class="letter-greeting">${escapeHtml(input.greeting)}</p>`,
+    renderCvHtml(input.doc),
+    `<p class="letter-closing">${escapeHtml(input.closing)}<br>${escapeHtml(name)}</p>`,
+  ].join("\n");
+  return (await cvDocumentHtml(input)).replace(
+    /<main>[\s\S]*<\/main>/,
+    () => `<main class="letter">\n${body}\n</main>`,
+  );
+}
+
 /** A complete, self-contained HTML document for one CV: used for the preview and the PDF. */
 export async function cvDocumentHtml(input: CvDocumentInput): Promise<string> {
   const name = input.contact?.name ?? "Your name (set it in Profile, Contact)";
@@ -99,6 +123,11 @@ ${input.css}
 /* Contextual alternates swap glyphs (Inter's hyphen between digits) for ones that map to private
    code points, so "2021-03" would come out of the PDF as "2021?03" for an ATS. Keep them off. */
 body, body * { font-variant-ligatures: no-contextual; }
+.letter p { margin: 0 0 10pt; }
+.letter .cv-section { margin: 0; padding: 0; border: 0; }
+.letter-date { margin-top: 6pt; }
+.letter-to { margin-bottom: 14pt; }
+.letter-closing { margin-top: 14pt; }
 </style>
 </head>
 <body>

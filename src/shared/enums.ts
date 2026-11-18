@@ -23,6 +23,9 @@ export const POSTING_SOURCES = [
   "browser",
 ] as const;
 
+/** How a cover letter makes its case: fit to the requirements, results first, motivation, short. */
+export const COVER_LETTER_ANGLES = ["fit", "impact", "motivation", "brief"] as const;
+
 /** Experience bank entry id prefixes per kind (ROLE-003, ACH-014, ...). */
 export const BANK_PREFIXES = {
   role: "ROLE",

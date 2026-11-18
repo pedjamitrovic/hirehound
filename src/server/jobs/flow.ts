@@ -10,6 +10,7 @@ import type { Block, CvDoc } from "../../shared/cv/types.ts";
 import { joinFrontmatter, splitFrontmatter } from "../../shared/frontmatter.ts";
 import type {
   ClaimView,
+  CoverLetterView,
   CvIssue,
   CvRow,
   CvView,
@@ -18,7 +19,13 @@ import type {
   TaskInfo,
 } from "../../shared/schemas/api.ts";
 import type { BankFile } from "../../shared/schemas/bank.ts";
-import { BaseCvFrontmatter, type CvTheme, TailoredCvFrontmatter } from "../../shared/schemas/cv.ts";
+import {
+  BaseCvFrontmatter,
+  type CoverLetterAngle,
+  CoverLetterFrontmatter,
+  type CvTheme,
+  TailoredCvFrontmatter,
+} from "../../shared/schemas/cv.ts";
 import type { EvaluationFrontmatter } from "../../shared/schemas/evaluation.ts";
 import type {
   RenderInfo,
@@ -32,21 +39,32 @@ import { formatPath } from "../../shared/validate.ts";
 import { runTask } from "../ai/run-task.ts";
 import type { AiService } from "../ai/service.ts";
 import { HttpError } from "../http/router.ts";
-import { cvDocumentHtml, themeCss } from "../pdf/document.ts";
+import { cvDocumentHtml, letterDocumentHtml, themeCss } from "../pdf/document.ts";
 import type { PdfRenderer } from "../pdf/render.ts";
 import { extractPdfText, pdfFontTypes, textCoverage } from "../pdf/text.ts";
 import type { ProfileService } from "../profile/service.ts";
 import type { TaskContext, TaskRunner } from "../tasks.ts";
 import { isNotFound, readTextFile, writeFileAtomic } from "../workspace/fsx.ts";
 import type { WorkspaceIndex } from "../workspace/index.ts";
-import { type JobRecord, readCvState, sha256 } from "../workspace/job-files.ts";
+import {
+  COVER_LETTER_FILES,
+  CV_FILES,
+  type CvState,
+  type DocFiles,
+  type JobRecord,
+  readCvState,
+  readDocState,
+  sha256,
+} from "../workspace/job-files.ts";
 import { JOB_FILES, jobDir } from "../workspace/layout.ts";
 import { changesMarkdown, evaluationMarkdown } from "./documents.ts";
 import type { JobService } from "./service.ts";
 import {
   type BaseChoice,
+  coverLetterTask,
   entryEvidenceText,
   evaluateTask,
+  postingText,
   tailorTask,
   toEvaluation,
   verifyTask,
@@ -66,6 +84,24 @@ type BankState = { bank: BankFile | null; sha256: string | null; index: Map<stri
 
 /** Minimum share of the CV's words that must come back out of the PDF before we warn. */
 const ATS_MIN_COVERAGE = 0.98;
+
+/** The two documents the flow writes, checks and renders. */
+type DocKind = "cv" | "cover-letter";
+const DOC_FILES: Record<DocKind, DocFiles> = { cv: CV_FILES, "cover-letter": COVER_LETTER_FILES };
+
+const LETTER_DATE = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+
+type ClaimViews = {
+  views: ClaimView[];
+  counts: { supported: number; weakened: number; unsupported: number };
+  unverified: number;
+  /** Ids whose bank content changed after the claim that cites them was verified. */
+  bankChanged: Set<string>;
+};
 
 const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
@@ -386,7 +422,7 @@ export class JobFlow {
     return sha256(JSON.stringify([claim.text, claim.ev, evidence]));
   }
 
-  #formatIssues(doc: CvDoc, parseIssues: CvIssue[]): CheckIssue[] {
+  #formatIssues(doc: CvDoc, parseIssues: CvIssue[], kind: DocKind = "cv"): CheckIssue[] {
     const issues: CheckIssue[] = parseIssues.map((i) => ({
       check: "format",
       n: -1,
@@ -394,7 +430,22 @@ export class JobFlow {
       severity: i.severity,
       message: i.message,
     }));
-    const front = TailoredCvFrontmatter.safeParse(doc.frontmatter);
+    if (kind === "cover-letter") {
+      for (const block of doc.blocks) {
+        if (block.t === "section" || block.t === "entry" || block.t === "list") {
+          issues.push({
+            check: "format",
+            n: -1,
+            line: block.t === "list" ? (block.items[0]?.line ?? 1) : block.line,
+            severity: "error",
+            message: "A cover letter is plain paragraphs, without headings or bullets",
+          });
+        }
+      }
+    }
+    const front = (kind === "cv" ? TailoredCvFrontmatter : CoverLetterFrontmatter).safeParse(
+      doc.frontmatter,
+    );
     if (!front.success) {
       for (const issue of front.error.issues) {
         issues.push({
@@ -409,20 +460,26 @@ export class JobFlow {
     return issues;
   }
 
-  async #check(id: string, ctx: TaskContext): Promise<VerificationFile> {
-    const cvText = await readTextFile(this.#path(id, JOB_FILES.cv));
-    if (cvText === null) throw new HttpError(409, "no-cv", "There is no tailored CV to check.");
+  async #check(id: string, ctx: TaskContext, kind: DocKind = "cv"): Promise<VerificationFile> {
+    const files = DOC_FILES[kind];
+    const noun = kind === "cv" ? "CV" : "cover letter";
+    const cvText = await readTextFile(this.#path(id, files.source));
+    if (cvText === null) throw new HttpError(409, "no-document", `There is no ${noun} to check.`);
     const cvSha = sha256(cvText);
     const { doc, issues: parseIssues } = parseCv(cvText);
     const bankState = await this.#bank();
     const { index } = bankState;
+    // A cover letter may state facts about the company and role that the posting gives.
+    const record = this.#record(id);
+    const context =
+      kind === "cover-letter" ? postingText(record.posting, record.postingBody) : undefined;
     const checks: CheckIssue[] = [
-      ...this.#formatIssues(doc, parseIssues),
-      ...checkTailoredCv(doc, bankState.bank).issues,
+      ...this.#formatIssues(doc, parseIssues, kind),
+      ...checkTailoredCv(doc, bankState.bank, { context }).issues,
     ];
 
     // Faithfulness verifier: only claims whose text or evidence changed are sent again.
-    const previous = (await readCvState(this.#d.root, id)).verification;
+    const previous = (await readDocState(this.#d.root, id, files)).verification;
     const byKey = new Map(previous?.claims.map((c) => [c.key, c]) ?? []);
     const keyed = cvClaims(doc).map((claim) => ({ claim, key: this.#claimKey(claim, index) }));
     const todo = keyed.filter(
@@ -446,7 +503,7 @@ export class JobFlow {
       const result = await runTask(
         this.#d.ai,
         verifyTask,
-        { claims: todo.map((t) => t.claim), evidence },
+        { claims: todo.map((t) => t.claim), evidence, posting: context },
         { root: this.#d.root, jobId: id, signal: ctx.signal, onProgress: ctx.aiProgress },
       );
       ctx.addUsage(result.usage);
@@ -484,14 +541,17 @@ export class JobFlow {
     ctx.progress("Rendering the PDF");
     let render: RenderInfo | null = null;
     try {
-      render = await this.#render(id, doc);
+      render = await this.#render(id, doc, kind);
       if (render.pages > render.max_pages) {
         checks.push({
           check: "format",
           n: -1,
           line: 1,
           severity: "warning",
-          message: `The PDF has ${render.pages} pages; your limit is ${render.max_pages} (Profile, Preferences).`,
+          message:
+            kind === "cv"
+              ? `The PDF has ${render.pages} pages; your limit is ${render.max_pages} (Profile, Preferences).`
+              : `The cover letter runs to ${render.pages} pages; keep it to one.`,
         });
       }
       if (render.ats.coverage < ATS_MIN_COVERAGE || render.ats.garbled > 0) {
@@ -500,7 +560,7 @@ export class JobFlow {
           n: -1,
           line: 1,
           severity: "warning",
-          message: `Only ${Math.floor(render.ats.coverage * 100)}% of the CV's words come back out of the PDF${render.ats.garbled ? `, and ${plural(render.ats.garbled, "character")} come out garbled` : ""}. An ATS reads the same text.${render.ats.missing.length ? ` Missing: ${render.ats.missing.join(", ")}.` : ""}`,
+          message: `Only ${Math.floor(render.ats.coverage * 100)}% of the ${noun}'s words come back out of the PDF${render.ats.garbled ? `, and ${plural(render.ats.garbled, "character")} come out garbled` : ""}. An ATS reads the same text.${render.ats.missing.length ? ` Missing: ${render.ats.missing.join(", ")}.` : ""}`,
         });
       }
       if (render.ats.type3_fonts > 0) {
@@ -533,49 +593,72 @@ export class JobFlow {
       render,
     };
     await this.#d.jobs.locked(id, async () => {
-      if ((await readTextFile(this.#path(id, JOB_FILES.cv))) !== cvText) {
+      if ((await readTextFile(this.#path(id, files.source))) !== cvText) {
         throw new HttpError(
           409,
           "changed-on-disk",
-          "cv.md changed while it was being checked. Check it again.",
+          `${files.source} changed while it was being checked. Check it again.`,
         );
       }
       await writeFileAtomic(
-        this.#path(id, JOB_FILES.verification),
+        this.#path(id, files.verification),
         `${JSON.stringify(file, null, 2)}\n`,
       );
     });
-    // Ready means verified: keep the state in line with the guard.
-    const verified = (await readCvState(this.#d.root, id)).verified;
-    if (verified) await this.#d.jobs.moveIf(id, ["tailoring"], "ready");
-    else await this.#d.jobs.moveIf(id, ["ready"], "tailoring");
+    if (kind === "cv") {
+      // Ready means verified: keep the state in line with the guard.
+      const verified = (await readCvState(this.#d.root, id)).verified;
+      if (verified) await this.#d.jobs.moveIf(id, ["tailoring"], "ready");
+      else await this.#d.jobs.moveIf(id, ["ready"], "tailoring");
+    }
     await this.#reload(id);
     return file;
   }
 
-  async #render(id: string, doc: CvDoc): Promise<RenderInfo> {
+  async #render(id: string, doc: CvDoc, kind: DocKind = "cv"): Promise<RenderInfo> {
     const { profile } = this.#d;
     const prefs = (await profile.preferences()).value;
     const contact = (await profile.contact()).value;
-    const front = TailoredCvFrontmatter.safeParse(doc.frontmatter);
-    const theme: CvTheme = front.success ? front.data.theme : "classic";
-    const headline = front.success ? front.data.headline : undefined;
     const paper = prefs?.cv.paper ?? "a4";
-    const html = await cvDocumentHtml({
-      doc,
-      contact,
-      headline,
-      css: await themeCss(this.#d.root, theme),
-      paper,
-    });
+    let html: string;
+    let expected: string;
+    let theme: CvTheme = "classic";
+    if (kind === "cv") {
+      const front = TailoredCvFrontmatter.safeParse(doc.frontmatter);
+      theme = front.success ? front.data.theme : "classic";
+      const headline = front.success ? front.data.headline : undefined;
+      html = await cvDocumentHtml({
+        doc,
+        contact,
+        headline,
+        css: await themeCss(this.#d.root, theme),
+        paper,
+      });
+      expected = [contact?.name, headline, cvPlainText(doc)].filter(Boolean).join("\n");
+    } else {
+      const front = CoverLetterFrontmatter.safeParse(doc.frontmatter);
+      theme = front.success ? front.data.theme : "classic";
+      const greeting = front.success ? front.data.greeting : "Dear hiring team,";
+      const closing = front.success ? front.data.closing : "Kind regards,";
+      html = await letterDocumentHtml({
+        doc,
+        contact,
+        css: await themeCss(this.#d.root, theme),
+        paper,
+        greeting,
+        closing,
+        company: this.#record(id).summary.company,
+        date: LETTER_DATE.format(new Date()),
+      });
+      expected = [contact?.name, greeting, cvPlainText(doc), closing].filter(Boolean).join("\n");
+    }
     const { pdf, pages } = await this.#d.pdf.render(html, paper);
-    await writeFileAtomic(this.#path(id, JOB_FILES.cvPdf), pdf);
-    const expected = [contact?.name, headline, cvPlainText(doc)].filter(Boolean).join("\n");
+    await writeFileAtomic(this.#path(id, DOC_FILES[kind].pdf), pdf);
     const ats = textCoverage(expected, extractPdfText(pdf));
     return {
       pdf_sha256: sha256(pdf),
       pages,
-      max_pages: prefs?.cv.max_pages ?? 2,
+      max_pages: kind === "cv" ? (prefs?.cv.max_pages ?? 2) : 1,
       rendered_at: localIsoDateTime(),
       theme,
       ats: {
@@ -623,6 +706,46 @@ export class JobFlow {
 
   // ---------- Review ----------
 
+  /** Verdicts and check issues per claim, reusing verdicts whose text and evidence are unchanged. */
+  #claimViews(
+    claims: Claim[],
+    state: CvState,
+    index: Map<string, IndexedEntry>,
+    issues: CheckIssue[],
+    diff: (claim: Claim) => Pick<ClaimView, "diff" | "baseText">,
+  ): ClaimViews {
+    const verification = state.verification;
+    const stored = new Map(verification?.claims.map((c) => [c.key, c]) ?? []);
+    const bankChanged = new Set<string>();
+    let unverified = 0;
+    const counts = { supported: 0, weakened: 0, unsupported: 0 };
+    const views = claims.map((claim): ClaimView => {
+      const verdict = stored.get(this.#claimKey(claim, index));
+      if (verdict) counts[verdict.verdict] += 1;
+      else {
+        unverified += 1;
+        const before = state.current
+          ? verification?.claims.find((c) => c.n === claim.n)
+          : undefined;
+        if (before) for (const evId of claim.ev) bankChanged.add(evId);
+      }
+      return {
+        n: claim.n,
+        kind: claim.kind,
+        inline: [],
+        text: claim.text,
+        ev: claim.ev,
+        line: claim.line,
+        ...diff(claim),
+        verdict: verdict?.verdict ?? null,
+        ...(verdict?.reason ? { reason: verdict.reason } : {}),
+        ...(verdict?.suggestion ? { suggestion: verdict.suggestion } : {}),
+        issues: issues.filter((i) => i.n === claim.n),
+      };
+    });
+    return { views, counts, unverified, bankChanged };
+  }
+
   async cvView(id: string): Promise<CvView> {
     const record = this.#record(id);
     const text = await readTextFile(this.#path(id, JOB_FILES.cv));
@@ -653,43 +776,25 @@ export class JobFlow {
       }
     }
 
-    const stored = new Map(verification?.claims.map((c) => [c.key, c]) ?? []);
-    const bankChanged = new Set<string>();
-    let unverified = 0;
-    const counts = { supported: 0, weakened: 0, unsupported: 0 };
-    const views = claims.map((claim): ClaimView => {
-      const key = this.#claimKey(claim, index);
-      const verdict = stored.get(key);
-      if (verdict) counts[verdict.verdict] += 1;
-      else {
-        unverified += 1;
-        const before = cvState.current
-          ? verification?.claims.find((c) => c.n === claim.n)
-          : undefined;
-        if (before) for (const evId of claim.ev) bankChanged.add(evId);
-      }
-      const d = diffByN.get(claim.n);
-      return {
-        n: claim.n,
-        kind: claim.kind,
-        inline: [],
-        text: claim.text,
-        ev: claim.ev,
-        line: claim.line,
-        diff: !baseText
-          ? "same"
-          : d?.op === "changed"
-            ? "changed"
-            : d?.op === "same"
-              ? "same"
-              : "added",
-        ...(d?.op === "changed" ? { baseText: d.base.text } : {}),
-        verdict: verdict?.verdict ?? null,
-        ...(verdict?.reason ? { reason: verdict.reason } : {}),
-        ...(verdict?.suggestion ? { suggestion: verdict.suggestion } : {}),
-        issues: live.issues.filter((i) => i.n === claim.n),
-      };
-    });
+    const { views, counts, unverified, bankChanged } = this.#claimViews(
+      claims,
+      cvState,
+      index,
+      live.issues,
+      (claim) => {
+        const d = diffByN.get(claim.n);
+        return {
+          diff: !baseText
+            ? "same"
+            : d?.op === "changed"
+              ? "changed"
+              : d?.op === "same"
+                ? "same"
+                : "added",
+          ...(d?.op === "changed" ? { baseText: d.base.text } : {}),
+        };
+      },
+    );
     const rows = buildRows(doc.blocks, views, removedBefore, pending);
 
     const evaluation = record.evaluation;
@@ -824,6 +929,250 @@ export class JobFlow {
       base: view.base?.id ?? this.#record(id).status?.base ?? "base",
       overrideReason: view.approve.needsOverride ? overrideReason?.trim() : undefined,
     });
+  }
+
+  // ---------- Cover letter (M4) ----------
+
+  #requireLetterable(record: JobRecord): void {
+    const state = record.status?.state ?? "found";
+    if (record.status?.application || !isPreApply(state)) {
+      throw new HttpError(
+        409,
+        "applied",
+        "The application was sent; its cover letter can no longer change.",
+      );
+    }
+    if (state === "found" || !record.evaluation) {
+      throw new HttpError(
+        409,
+        "not-evaluated",
+        "Evaluate the job first: the letter works from its requirements.",
+      );
+    }
+  }
+
+  /** Writes (or, with feedback, revises) the cover letter, then checks it like the CV. */
+  startCoverLetter(
+    id: string,
+    body: { angle: CoverLetterAngle; feedback?: string | undefined },
+  ): TaskInfo {
+    const record = this.#record(id);
+    this.#requireLetterable(record);
+    if (body.feedback && !record.files.includes(JOB_FILES.coverLetter)) {
+      throw new HttpError(409, "no-cover-letter", "There is no cover letter to change yet.");
+    }
+    return this.#d.tasks.start(
+      "cover-letter",
+      `${body.feedback ? "Revising" : "Writing"} the cover letter for ${record.summary.company}`,
+      async (ctx) => {
+        const bank = this.#requireConfirmed(await this.#bank());
+        const current = this.#record(id);
+        const contact = (await this.#d.profile.contact()).value;
+        const cvText = await readTextFile(this.#path(id, JOB_FILES.cv));
+        const cvFront = cvText
+          ? TailoredCvFrontmatter.safeParse(parseCv(cvText).doc.frontmatter)
+          : null;
+        const currentLetter = body.feedback
+          ? await readTextFile(this.#path(id, JOB_FILES.coverLetter))
+          : null;
+        ctx.progress("Writing the cover letter");
+        const result = await runTask(
+          this.#d.ai,
+          coverLetterTask,
+          {
+            posting: current.posting,
+            postingBody: current.postingBody,
+            evaluation: current.evaluation,
+            cv: cvText ? splitFrontmatter(cvText).body : null,
+            bank,
+            angle: body.angle,
+            name: contact?.name ?? null,
+            feedback:
+              body.feedback && currentLetter
+                ? { text: body.feedback, current: splitFrontmatter(currentLetter).body }
+                : undefined,
+          },
+          { root: this.#d.root, jobId: id, signal: ctx.signal, onProgress: ctx.aiProgress },
+        );
+        ctx.addUsage(result.usage);
+        const out = result.output;
+        const front: CoverLetterFrontmatter = {
+          job: id,
+          angle: body.angle,
+          greeting: out.greeting.trim(),
+          closing: out.closing.trim(),
+          generated_at: localIsoDateTime(),
+          engine: { id: result.engine, model: result.model },
+          theme: cvFront?.success ? cvFront.data.theme : "classic",
+          ...(out.notes.trim() ? { notes: out.notes.trim() } : {}),
+        };
+        await writeFileAtomic(
+          this.#path(id, JOB_FILES.coverLetter),
+          joinFrontmatter(front, out.body),
+        );
+        return checkSummary(await this.#check(id, ctx, "cover-letter"));
+      },
+      { jobId: id },
+    );
+  }
+
+  startCoverLetterCheck(id: string): TaskInfo {
+    const record = this.#record(id);
+    if (!record.files.includes(JOB_FILES.coverLetter)) {
+      throw new HttpError(409, "no-cover-letter", "There is no cover letter to check yet.");
+    }
+    return this.#d.tasks.start(
+      "check-cover-letter",
+      `Checking the cover letter for ${record.summary.company}`,
+      async (ctx) => checkSummary(await this.#check(id, ctx, "cover-letter")),
+      { jobId: id },
+    );
+  }
+
+  async saveCoverLetter(
+    id: string,
+    text: string,
+    expectedSha256: string | null,
+  ): Promise<TaskInfo> {
+    const record = this.#record(id);
+    this.#requireLetterable(record);
+    if (this.#d.tasks.runningForJob(id)) {
+      throw new HttpError(
+        409,
+        "job-busy",
+        "Something is already running for this job. Wait for it to finish.",
+      );
+    }
+    await this.#d.jobs.locked(id, async () => {
+      const current = await readTextFile(this.#path(id, JOB_FILES.coverLetter));
+      if (current === null)
+        throw new HttpError(404, "no-cover-letter", "There is no cover letter yet.");
+      if (sha256(current) !== expectedSha256) {
+        throw new HttpError(
+          409,
+          "changed-on-disk",
+          "cover-letter.md changed since you opened it (in another tab or an editor). Reload to see the latest version.",
+        );
+      }
+      await writeFileAtomic(this.#path(id, JOB_FILES.coverLetter), text.replace(/\r\n?/g, "\n"));
+    });
+    await this.#reload(id);
+    return this.startCoverLetterCheck(id);
+  }
+
+  async coverLetterView(id: string): Promise<CoverLetterView> {
+    const record = this.#record(id);
+    const prefs = (await this.#d.profile.preferences()).value;
+    const policy = prefs?.cover_letter.policy ?? "when-requested";
+    const text = await readTextFile(this.#path(id, JOB_FILES.coverLetter));
+    if (text === null) throw new HttpError(404, "no-cover-letter", "There is no cover letter yet.");
+    const { doc, issues: parseIssues } = parseCv(text);
+    const front = CoverLetterFrontmatter.safeParse(doc.frontmatter);
+    const state = await readDocState(this.#d.root, id, COVER_LETTER_FILES);
+    const bankState = await this.#bank();
+    const { index } = bankState;
+    const formatIssues = this.#formatIssues(doc, parseIssues, "cover-letter");
+    const live = checkTailoredCv(doc, bankState.bank, {
+      context: postingText(record.posting, record.postingBody),
+    });
+    const claims = cvClaims(doc);
+    const { views, counts, unverified, bankChanged } = this.#claimViews(
+      claims,
+      state,
+      index,
+      live.issues,
+      () => ({ diff: "same" }),
+    );
+    const rows = buildRows(doc.blocks, views, new Map(), []);
+    const allChecks = [...formatIssues, ...live.issues];
+    const errors = emptyCheckCounts();
+    for (const i of allChecks) if (i.severity === "error") errors[i.check] += 1;
+    const failed = Object.entries(errors)
+      .filter(([, n]) => n > 0)
+      .map(([check]) => check);
+
+    const approval = record.status?.cover_letter_approval ?? null;
+    const approvedNow = approval !== null && approval.sha256 === state.pdfSha256;
+    const blockers: string[] = [];
+    if (record.status?.application) blockers.push("The application was sent.");
+    else if (approvedNow) blockers.push("Already approved.");
+    if (failed.length)
+      blockers.push(`Checks failed: ${failed.join(", ")}. Fix the paragraphs marked below.`);
+    if (counts.unsupported) {
+      blockers.push(
+        `${plural(counts.unsupported, "statement")} ${counts.unsupported === 1 ? "is" : "are"} not supported by the experience bank or the posting.`,
+      );
+    }
+    if (bankChanged.size) {
+      blockers.push(
+        `The experience bank changed for ${[...bankChanged].join(", ")}. Check the letter again.`,
+      );
+    } else if (!state.current) {
+      blockers.push(
+        state.verification
+          ? "The letter changed since it was checked. Check it again."
+          : "The letter has not been checked yet.",
+      );
+    } else if (unverified) {
+      blockers.push(`${plural(unverified, "paragraph")} not verified yet. Check the letter again.`);
+    }
+    if (state.current && !state.pdfSha256)
+      blockers.push("There is no PDF of this exact letter yet.");
+
+    return {
+      text,
+      sha256: sha256(text),
+      angle: front.success ? front.data.angle : null,
+      greeting: front.success ? front.data.greeting : null,
+      closing: front.success ? front.data.closing : null,
+      generatedAt: front.success ? front.data.generated_at : null,
+      notes: front.success ? (front.data.notes ?? null) : null,
+      rows,
+      checks: { issues: allChecks, errors },
+      verification: {
+        state: !state.verification ? "none" : state.current ? "current" : "stale",
+        checkedAt: state.verification?.checked_at ?? null,
+        ...counts,
+        unverified,
+      },
+      render: state.verification?.render
+        ? { ...state.verification.render, current: state.pdfSha256 !== null }
+        : null,
+      evidence: this.#evidence(
+        claims.flatMap((c) => c.ev),
+        index,
+      ),
+      approval: approval ? { ...approval, current: approvedNow } : null,
+      approve: { allowed: blockers.length === 0, blockers },
+      policy,
+    };
+  }
+
+  async coverLetterPdf(id: string): Promise<Buffer> {
+    this.#record(id);
+    try {
+      return await readFile(this.#path(id, JOB_FILES.coverLetterPdf));
+    } catch (error) {
+      if (isNotFound(error))
+        throw new HttpError(404, "no-pdf", "There is no cover letter PDF yet.");
+      throw error;
+    }
+  }
+
+  /** The cover letter has its own approval, locked to the SHA-256 of cover-letter.pdf. */
+  async approveCoverLetter(id: string): Promise<JobRecord> {
+    const view = await this.coverLetterView(id);
+    if (!view.approve.allowed) {
+      throw new HttpError(
+        409,
+        "not-approvable",
+        view.approve.blockers[0] ?? "This letter cannot be approved yet.",
+      );
+    }
+    const state = await readDocState(this.#d.root, id, COVER_LETTER_FILES);
+    if (!state.pdfSha256)
+      throw new HttpError(409, "no-pdf", "There is no PDF of this exact letter yet.");
+    return this.#d.jobs.approveCoverLetter(id, state.pdfSha256);
   }
 }
 

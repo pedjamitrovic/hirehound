@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { COVER_LETTER_ANGLES } from "../enums.ts";
 import { BaseId, IsoDateTime, JobId, Sha256 } from "./common.ts";
 
 /** Frontmatter of CV Markdown files. The body dialect is described in docs/cv-dialect.md. */
@@ -33,3 +34,21 @@ export const TailoredCvFrontmatter = z.object({
   notes: z.string().optional(),
 });
 export type TailoredCvFrontmatter = z.infer<typeof TailoredCvFrontmatter>;
+
+export const CoverLetterAngle = z.enum(COVER_LETTER_ANGLES);
+export type CoverLetterAngle = z.infer<typeof CoverLetterAngle>;
+
+/** jobs/<id>/cover-letter.md: paragraphs in the CV dialect, each citing the bank. */
+export const CoverLetterFrontmatter = z.object({
+  job: JobId,
+  angle: CoverLetterAngle,
+  /** "Dear Initrode hiring team," */
+  greeting: z.string().min(1),
+  /** "Kind regards," (the name from contact.yaml follows). */
+  closing: z.string().min(1),
+  generated_at: IsoDateTime,
+  engine: z.object({ id: z.string(), model: z.string() }),
+  theme: CvTheme.default("classic"),
+  notes: z.string().optional(),
+});
+export type CoverLetterFrontmatter = z.infer<typeof CoverLetterFrontmatter>;

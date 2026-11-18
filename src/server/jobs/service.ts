@@ -11,7 +11,12 @@ import { localIsoDate, localIsoDateTime } from "../../shared/time.ts";
 import type { AppContext } from "../app-context.ts";
 import { HttpError } from "../http/router.ts";
 import { errorCode, readTextFile, writeFileAtomic } from "../workspace/fsx.ts";
-import { guardContextFor, type JobRecord } from "../workspace/job-files.ts";
+import {
+  COVER_LETTER_FILES,
+  guardContextFor,
+  type JobRecord,
+  readDocState,
+} from "../workspace/job-files.ts";
 import { JOB_FILES, JOBS_DIR, jobDir } from "../workspace/layout.ts";
 import { parseYaml } from "../workspace/yamlfile.ts";
 import { normalizePostingText, type Snapshot, textSha256 } from "./snapshot.ts";
@@ -232,6 +237,21 @@ export class JobService {
       }),
     );
     return { results };
+  }
+
+  /** The cover letter's own approval, locked to the SHA-256 of cover-letter.pdf. */
+  approveCoverLetter(id: string, pdfSha256: string): Promise<JobRecord> {
+    return this.#updateStatus(id, async (status) => {
+      const state = await readDocState(this.#app.root, id, COVER_LETTER_FILES);
+      if (state.pdfSha256 !== pdfSha256 || !state.verified) {
+        throw new HttpError(
+          409,
+          "changed-on-disk",
+          "cover-letter.pdf changed while you were reviewing it. Look at it again before approving.",
+        );
+      }
+      return { ...status, cover_letter_approval: { at: localIsoDateTime(), sha256: pdfSha256 } };
+    });
   }
 
   /**
