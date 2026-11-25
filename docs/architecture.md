@@ -132,7 +132,8 @@ passed as extra evidence for statements about the company. It has its own files
 ## Discovery (M5)
 
 `src/server/discovery`: `ats.ts` reads the public job board APIs of Greenhouse, Lever and Ashby
-and normalises their postings (lenient Zod parsing, so an unexpected field never breaks a scan);
+and normalises their postings (unknown fields are ignored; a board whose answer lacks a required
+field is reported as unreadable and changes nothing);
 `filter.ts` holds the portal and preference filters; `linkedin.ts` reads job cards from alert
 emails (MIME, quoted-printable, plain text first, HTML as fallback); `service.ts` (`DiscoveryService`)
 runs scans, dedupes against the index, adds Found jobs through `JobService.createDiscovered`,

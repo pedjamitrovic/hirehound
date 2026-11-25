@@ -100,6 +100,41 @@ describe("ATS boards", () => {
     assert.equal(job?.text, "Build the platform.\n\n## What you will do\n\n- Own the CI\n- Mentor");
   });
 
+  it("never guesses the period of a Lever pay range", () => {
+    const pay = (salaryRange: Record<string, unknown>) => {
+      const [job] = parseBoard(portal({ provider: "lever" }), [
+        {
+          id: "p1",
+          text: "Engineer",
+          hostedUrl: "https://jobs.lever.co/acme/p1",
+          descriptionPlain: "Build things.",
+          salaryRange,
+        },
+      ]);
+      return { salary: job?.salary ?? null, text: job?.text };
+    };
+    assert.deepEqual(pay({ min: 40, max: 60, currency: "USD", interval: "per-hour-wage" }).salary, {
+      min: 40,
+      max: 60,
+      currency: "USD",
+      period: "hour",
+      raw: "USD 40-60 per hour",
+    });
+    // Unknown or missing intervals stay text; they must not become a yearly salary.
+    for (const interval of ["per-week-salary", "semi-month-salary", undefined]) {
+      const result = pay({ min: 1500, max: 2000, currency: "USD", interval });
+      assert.equal(result.salary, null, String(interval));
+      assert.match(result.text ?? "", /Compensation: USD 1500-2000/);
+    }
+    assert.equal(
+      pay({ max: 110000, currency: "EUR", interval: "per-year-salary" }).salary?.raw,
+      "EUR up to 110000 per year",
+    );
+    // A range the wrong way round is put in order instead of producing an invalid posting.md.
+    const swapped = pay({ min: 9, max: 5, currency: "EUR", interval: "per-hour-wage" }).salary;
+    assert.deepEqual([swapped?.min, swapped?.max], [5, 9]);
+  });
+
   it("reads Ashby jobs, skips unlisted ones and keeps the pay summary", () => {
     const jobs = parseBoard(portal({ provider: "ashby", board: "Acme" }), {
       jobs: [

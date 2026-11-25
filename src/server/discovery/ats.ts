@@ -172,12 +172,49 @@ function workplaceOf(
   return workplaceFrom(null, ...texts.map((x) => x ?? null));
 }
 
-const PERIOD: Record<string, SalaryRange["period"]> = {
-  "per-year-salary": "year",
-  "per-month-salary": "month",
-  "per-day-salary": "day",
-  "per-hour-wage": "hour",
-};
+type LeverPay = NonNullable<z.infer<typeof Lever>[number]["salaryRange"]>;
+
+/**
+ * Lever documents the pay range but not its interval names, so only intervals that plainly say
+ * "per-year", "per-month", "per-day" or "per-hour" become a salary. Anything else is kept as text:
+ * a weekly wage must never be shown as a yearly one.
+ */
+function leverPay(range: LeverPay | null | undefined): {
+  salary: SalaryRange | null;
+  note: string | null;
+} {
+  const currency = range?.currency?.toUpperCase();
+  if (!range || !currency || !/^[A-Z]{3}$/.test(currency)) return { salary: null, note: null };
+  let min = range.min ?? undefined;
+  let max = range.max ?? undefined;
+  if (min !== undefined && max !== undefined && min > max) [min, max] = [max, min];
+  if ((min === undefined && max === undefined) || (min ?? 0) < 0 || (max ?? 0) < 0) {
+    return { salary: null, note: null };
+  }
+  const amount =
+    min !== undefined && max !== undefined
+      ? `${min}-${max}`
+      : min !== undefined
+        ? `from ${min}`
+        : `up to ${max}`;
+  const period = /^per-(year|month|day|hour)\b/.exec(range.interval ?? "")?.[1] as
+    | SalaryRange["period"]
+    | undefined;
+  if (!period) {
+    const interval = range.interval ? ` (${range.interval})` : "";
+    return { salary: null, note: `Compensation: ${currency} ${amount}${interval}` };
+  }
+  return {
+    salary: {
+      ...(min !== undefined ? { min } : {}),
+      ...(max !== undefined ? { max } : {}),
+      currency,
+      period,
+      raw: `${currency} ${amount} per ${period}`,
+    },
+    note: null,
+  };
+}
 
 /** Turns a board's JSON into postings. Exported for tests with recorded payloads. */
 export function parseBoard(portal: Portal, payload: unknown): DiscoveredPosting[] {
@@ -216,19 +253,7 @@ export function parseBoard(portal: Portal, payload: unknown): DiscoveredPosting[
           (l) =>
             `${l.text ? `## ${l.text.trim()}\n\n` : ""}${htmlToText(`<ul>${l.content ?? ""}</ul>`)}`,
         );
-      const range = j.salaryRange;
-      const currency = range?.currency?.toUpperCase();
-      const period = PERIOD[range?.interval ?? ""] ?? "year";
-      const salary: SalaryRange | null =
-        range && currency && /^[A-Z]{3}$/.test(currency) && (range.min != null || range.max != null)
-          ? {
-              ...(range.min != null ? { min: range.min } : {}),
-              ...(range.max != null ? { max: range.max } : {}),
-              currency,
-              period,
-              raw: `${currency} ${range.min ?? ""}-${range.max ?? ""} per ${period}`,
-            }
-          : null;
+      const { salary, note } = leverPay(j.salaryRange);
       return {
         ...base(j.id),
         title: j.text.trim(),
@@ -239,7 +264,7 @@ export function parseBoard(portal: Portal, payload: unknown): DiscoveredPosting[
         salary,
         postedAt: j.createdAt ? new Date(j.createdAt).toISOString().slice(0, 10) : null,
         text: normalizePostingText(
-          [j.descriptionPlain ?? "", ...sections, j.additionalPlain ?? ""]
+          [j.descriptionPlain ?? "", ...sections, j.additionalPlain ?? "", note ?? ""]
             .filter((s) => s.trim())
             .join("\n\n"),
         ),
