@@ -9,6 +9,8 @@ import type { AppContext } from "./app-context.ts";
 import { ApplyBrowser } from "./apply/browser.ts";
 import { ApplyService } from "./apply/service.ts";
 import { configDir } from "./config.ts";
+import { ScanScheduler } from "./discovery/scheduler.ts";
+import { DiscoveryService } from "./discovery/service.ts";
 import { checkRequest } from "./http/guard.ts";
 import { HttpError, Router, sendError } from "./http/router.ts";
 import { SseHub } from "./http/sse.ts";
@@ -49,6 +51,10 @@ export type ServerOptions = {
   pdf?: PdfRenderer;
   /** Test seam: the assisted-apply browser (tests run it headless with a temp profile). */
   applyBrowser?: ApplyBrowser;
+  /** Test seam: answers job-board API requests (M5) without the network. */
+  boardFetch?: typeof fetch;
+  /** Run scheduled scans while the server is up (default true; tests turn it off). */
+  schedule?: boolean;
 };
 
 export type RunningServer = {
@@ -105,6 +111,18 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   const browser =
     options.applyBrowser ??
     new ApplyBrowser({ profileDir: join(options.configDir ?? configDir(), "browser-profile") });
+  const fetchPostingFn = options.fetchPosting ?? ((url: string) => fetchPosting(url));
+  const discovery = new DiscoveryService({
+    root,
+    index,
+    jobs,
+    profile,
+    tasks,
+    fetchPosting: fetchPostingFn,
+    ...(options.boardFetch ? { fetchImpl: options.boardFetch } : {}),
+  });
+  const scheduler = new ScanScheduler({ discovery, tasks, log });
+  if (options.schedule ?? true) scheduler.start();
   const context: AppContext = {
     root,
     index,
@@ -112,8 +130,9 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
     jobs,
     flow: new JobFlow({ root, index, jobs, profile, ai, tasks, pdf }),
     apply: new ApplyService({ root, index, jobs, profile, ai, tasks, browser }),
+    discovery,
     snapshots: new SnapshotCache(),
-    fetchPosting: options.fetchPosting ?? ((url) => fetchPosting(url)),
+    fetchPosting: fetchPostingFn,
     openFolder: options.openFolder ?? openExternal,
     ai,
     tasks,
@@ -205,6 +224,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
     context,
     async close() {
       watcher.close();
+      scheduler.stop();
       tasks.cancelAll();
       hub.close();
       await pdf.close();

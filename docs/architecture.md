@@ -21,6 +21,7 @@ src/server/
                              evaluate, tailor, verify tasks and the review/approve flow (M3)
   ai/                        engine adapter (Anthropic API, Claude Code), runTask, prompts/
   apply/                     assisted-apply browser, form scan, form mapping, application record (M4)
+  discovery/                 job board adapters, filters, LinkedIn alerts, scans, scheduler (M5)
   onboarding/                AI task definitions and the onboarding flow
   profile/                   profile files, experience bank ops, base CVs, imports
   import/                    ZIP, DOCX and LinkedIn export readers (no dependencies)
@@ -127,6 +128,19 @@ The cover letter reuses the CV's pipeline in `JobFlow`: the same `#check` (deter
 verifier with reused verdicts, render, ATS read-back) parameterised by document, with the posting
 passed as extra evidence for statements about the company. It has its own files
 (`cover-letter.*`) and its own approval, and does not move the job between states.
+
+## Discovery (M5)
+
+`src/server/discovery`: `ats.ts` reads the public job board APIs of Greenhouse, Lever and Ashby
+and normalises their postings (unknown fields are ignored; a board whose answer lacks a required
+field is reported as unreadable and changes nothing);
+`filter.ts` holds the portal and preference filters; `linkedin.ts` reads job cards from alert
+emails (MIME, quoted-printable, plain text first, HTML as fallback); `service.ts` (`DiscoveryService`)
+runs scans, dedupes against the index, adds Found jobs through `JobService.createDiscovered`,
+records liveness through `JobService.setListing` and appends to `sources/scans.jsonl`;
+`scheduler.ts` checks every minute whether a scan is due. `hirehound scan` builds the same service
+without the HTTP server. Tests inject `boardFetch` and `fetchPosting`, so nothing touches the
+network.
 
 ## AI engine adapter
 

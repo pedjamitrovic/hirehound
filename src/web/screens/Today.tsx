@@ -1,5 +1,6 @@
 import type { ComponentChildren } from "preact";
-import type { JobSummary, ProfileFileState } from "../../shared/schemas/api.ts";
+import { useEffect, useState } from "preact/hooks";
+import type { JobSummary, ProfileFileState, SourcesView } from "../../shared/schemas/api.ts";
 import { api, errorMessage } from "../api.ts";
 import type { ScreenProps } from "../app.tsx";
 import { Icon } from "../components/Icon.tsx";
@@ -43,6 +44,39 @@ function EvaluateAll(props: { jobs: JobSummary[] }) {
         ? "Evaluating..."
         : `Evaluate ${props.jobs.length === 1 ? "it" : `all ${props.jobs.length}`}`}
     </button>
+  );
+}
+
+/** What the job board scans did in the last day, with a way to the details. */
+function ScanSummary() {
+  const [view, setView] = useState<SourcesView | null>(null);
+  const running = runningTasks.value.some((t) => t.kind === "scan" || t.kind === "import-alert");
+  useEffect(() => {
+    api.sources().then(setView, () => setView(null));
+  }, [running]);
+  if (!view || (view.portals.length === 0 && view.scans.length === 0)) return null;
+  const day = view.scans.filter((s) => Date.now() - Date.parse(s.at) < 86_400_000);
+  const sum = (pick: (s: (typeof day)[number]) => number) => day.reduce((n, s) => n + pick(s), 0);
+  const failed = day.filter((s) => !s.ok).length;
+  return (
+    <Section title="From your job boards" action={<Link href="/sources">Open Sources</Link>}>
+      <div class="card-body secondary">
+        {running
+          ? "Scanning now..."
+          : day.length
+            ? `Last 24 hours: ${sum((s) => s.added.length)} added, ${sum((s) => s.filtered.length)} filtered, ${sum((s) => s.gone.length)} no longer listed${failed ? `, ${failed} boards could not be read` : ""}.`
+            : "No scans in the last 24 hours."}{" "}
+        {view.nextScanAt && !running ? (
+          <span class="muted">
+            Next scan{" "}
+            {Date.parse(view.nextScanAt) <= Date.now()
+              ? "soon"
+              : `in about ${Math.max(1, Math.round((Date.parse(view.nextScanAt) - Date.now()) / 3_600_000))}h`}
+            .
+          </span>
+        ) : null}
+      </div>
+    </Section>
   );
 }
 
@@ -219,6 +253,7 @@ export function TodayScreen(props: ScreenProps) {
                   <JobRows jobs={toApply} empty="" tab="application" />
                 </Section>
               ) : null}
+              <ScanSummary />
               <Section
                 title="To evaluate"
                 count={toEvaluate.length}

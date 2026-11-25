@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { EMPLOYMENT_TYPES, POSTING_SOURCES, WORKPLACES } from "../enums.ts";
-import { IsoDate, IsoDateTime, SalaryRange, Sha256, Version } from "./common.ts";
+import { IsoDate, IsoDateTime, JOB_ID_PATTERN, SalaryRange, Sha256, Version } from "./common.ts";
 
 export const PostingSource = z.enum(POSTING_SOURCES);
 export const Workplace = z.enum(WORKPLACES);
@@ -27,6 +27,8 @@ export const PostingFrontmatter = z.object({
   fetched_at: IsoDateTime,
   /** Hash of the normalised body text: change and repost detection. */
   text_sha256: Sha256,
+  /** M5: an earlier job for the same company and role, when this posting looks like a repost. */
+  repost_of: z.string().regex(JOB_ID_PATTERN).optional(),
 });
 
 export type PostingSource = z.infer<typeof PostingSource>;

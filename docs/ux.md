@@ -153,3 +153,11 @@ answer and the confirmation.
 The Cover letter tab works like the CV review: each paragraph with its evidence chips and verdict,
 "Use this wording" for weakened lines, Rewrite (another angle or a note), Edit, the PDF beside it, and
 its own Approve.
+
+### Sources (M5)
+
+Job boards (company, provider, board link, filters, last scan), the schedule (every 6 to 48 hours,
+or manual only) and Scan now. Recent scans expand to what each one added, filtered (with the reason
+and Add anyway), found no longer listed and saw listed again. LinkedIn job alerts: drop an .eml or
+paste the email. Jobs show "No longer listed" and "Repost" badges; a posting imported without its
+text asks for it on the Posting tab. Today shows the last day of scans.

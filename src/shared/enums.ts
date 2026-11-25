@@ -23,6 +23,9 @@ export const POSTING_SOURCES = [
   "browser",
 ] as const;
 
+/** Applicant tracking systems whose public job boards Hirehound can scan (M5). */
+export const ATS_PROVIDERS = ["greenhouse", "lever", "ashby"] as const;
+
 /** How a cover letter makes its case: fit to the requirements, results first, motivation, short. */
 export const COVER_LETTER_ANGLES = ["fit", "impact", "motivation", "brief"] as const;
 

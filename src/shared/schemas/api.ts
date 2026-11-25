@@ -11,6 +11,7 @@ import type { AnswerSource, ApplicationFile, UsedAnswer } from "./application.ts
 import { BaseId, JobId, type SalaryRange } from "./common.ts";
 import type { CoverLetterAngle } from "./cv.ts";
 import type { EvaluationFrontmatter, ScoreBand } from "./evaluation.ts";
+import type { Portal } from "./portals.ts";
 import {
   EmploymentType,
   type PostingFrontmatter,
@@ -42,6 +43,10 @@ export type JobSummary = {
   band: ScoreBand | null;
   /** The evaluation's verdict (block G). */
   recommendation: "apply" | "stretch" | "skip" | null;
+  /** M5: false when the posting left its job board; null when Hirehound does not track it. */
+  listed: boolean | null;
+  /** M5: an earlier job this posting looks like a repost of. */
+  repostOf: string | null;
   base: string | null;
   tags: string[];
   addedAt: string;
@@ -342,6 +347,79 @@ export const ApproveBody = z.object({
   /** Required when the fit score is below the threshold. */
   overrideReason: z.string().trim().max(2000).optional(),
 });
+
+// ---------- M5: discovery ----------
+
+/** A posting a scan left out, and why; it can still be added. */
+export type FilteredPosting = {
+  ref: string;
+  title: string;
+  url: string;
+  location: string | null;
+  reason: string;
+};
+
+/** One line of sources/scans.jsonl: one portal (or alert import) in one scan. */
+export type ScanEntry = {
+  at: string;
+  /** Portal id, or "linkedin-email" for an alert import. */
+  source: string;
+  trigger: "manual" | "scheduled" | "cli" | "import";
+  ok: boolean;
+  error?: string;
+  /** Postings on the board (or in the alert). */
+  listed: number;
+  added: { id: string; title: string; repostOf?: string }[];
+  duplicates: number;
+  filtered: FilteredPosting[];
+  /** Jobs that left the board in this scan; Found and Evaluated ones were expired. */
+  gone: { id: string; title: string; expired: boolean }[];
+  /** Jobs that were gone and are listed again. */
+  back: { id: string; title: string }[];
+};
+
+export type SourcesView = {
+  /** profile-style file state, so edits never overwrite a newer file. */
+  file: { sha256: string | null; diagnostics: Diagnostic[] };
+  everyHours: number;
+  portals: (Portal & { lastScan: ScanEntry | null })[];
+  lastScanAt: string | null;
+  nextScanAt: string | null;
+  /** Newest first. */
+  scans: ScanEntry[];
+};
+
+export const PortalsSaveBody = z.object({
+  value: z.unknown(),
+  expectedSha256: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/)
+    .nullable(),
+});
+
+export const BoardUrlBody = z.object({ url: HttpUrl });
+
+export const ScanBody = z.object({
+  /** Scan only these portals (default: every enabled one). */
+  portals: z.array(z.string().min(1).max(40)).max(200).optional(),
+});
+
+export const AddFilteredBody = z.object({
+  source: z.string().min(1).max(40),
+  ref: z.string().min(1).max(300),
+});
+
+export const AlertImportBody = z.object({
+  /** The alert email: a whole .eml file or the pasted text. */
+  text: z.string().min(20, "Paste the whole alert email").max(5_000_000),
+});
+
+export const PostingTextBody = z.object({
+  text: z.string().trim().min(20, "Paste the full posting text").max(200_000),
+});
+
+export type ScanBody = z.input<typeof ScanBody>;
+export type AddFilteredBody = z.input<typeof AddFilteredBody>;
 
 // ---------- M4: cover letter ----------
 

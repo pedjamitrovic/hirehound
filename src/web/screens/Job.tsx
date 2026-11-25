@@ -90,7 +90,7 @@ function Stepper(props: { detail: JobDetail }) {
   );
 }
 
-function PostingTab(props: { detail: JobDetail }) {
+function PostingTab(props: { detail: JobDetail; onChange: (d: JobDetail) => void }) {
   const { detail } = props;
   const front = detail.posting?.frontmatter;
   if (!detail.posting) {
@@ -125,9 +125,63 @@ function PostingTab(props: { detail: JobDetail }) {
       {detail.posting.body.trim() ? (
         <PostingText text={detail.posting.body} />
       ) : (
-        <p class="muted">The snapshot has no text.</p>
+        <PasteText detail={detail} onChange={props.onChange} />
       )}
     </article>
+  );
+}
+
+/** For postings that arrived without their text (a LinkedIn alert when LinkedIn refused the page). */
+function PasteText(props: { detail: JobDetail; onChange: (d: JobDetail) => void }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const url = props.detail.posting?.frontmatter?.url;
+  return (
+    <div class="paste-posting">
+      <Notice>
+        This posting came without its text
+        {url ? (
+          <>
+            {" "}
+            (LinkedIn usually hides it from signed-out visitors). Open{" "}
+            <a href={url} target="_blank" rel="noreferrer noopener">
+              the posting
+            </a>
+            , copy its text and paste it here.
+          </>
+        ) : (
+          ". Paste it here."
+        )}{" "}
+        Evaluating needs it.
+      </Notice>
+      <textarea
+        class="textarea"
+        rows={10}
+        aria-label="Posting text"
+        placeholder="The full posting: role, responsibilities, requirements..."
+        value={text}
+        onInput={(e) => setText(e.currentTarget.value)}
+      />
+      <div>
+        <button
+          type="button"
+          class="btn primary"
+          disabled={busy || text.trim().length < 20}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              props.onChange(await api.setPostingText(props.detail.summary.id, text));
+            } catch (e) {
+              toast(errorMessage(e), "error");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Save the posting text
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -541,6 +595,27 @@ export function JobScreen(props: ScreenProps & { id: string; tab: TabId }) {
                     {RECOMMENDATION[summary.recommendation]}
                   </span>
                 ) : null}
+                {summary.listed === false ? (
+                  <span
+                    class="badge warning"
+                    title={
+                      detail.status?.listing
+                        ? `Since ${formatDateTime(detail.status.listing.since)}`
+                        : undefined
+                    }
+                  >
+                    No longer listed
+                  </span>
+                ) : null}
+                {summary.repostOf ? (
+                  <Link
+                    class="badge warning"
+                    href={jobPath(summary.repostOf)}
+                    title="An earlier job for the same company and role"
+                  >
+                    Repost
+                  </Link>
+                ) : null}
                 {summary.location ? <span>{summary.location}</span> : null}
                 {WORKPLACE[summary.workplace] ? <span>{WORKPLACE[summary.workplace]}</span> : null}
                 {front?.salary?.raw ? <span>{front.salary.raw}</span> : null}
@@ -575,7 +650,7 @@ export function JobScreen(props: ScreenProps & { id: string; tab: TabId }) {
                 <DiagnosticList items={detail.diagnostics} />
               </Notice>
             ) : null}
-            {tab === "posting" ? <PostingTab detail={detail} /> : null}
+            {tab === "posting" ? <PostingTab detail={detail} onChange={onChange} /> : null}
             {tab === "evaluation" ? <EvaluationTab detail={detail} /> : null}
             {tab === "cv" ? <CvTab detail={detail} onChange={onChange} /> : null}
             {tab === "cover-letter" ? <CoverLetterTab detail={detail} onChange={onChange} /> : null}

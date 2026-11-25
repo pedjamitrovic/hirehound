@@ -1,5 +1,6 @@
 import type { AiService } from "./ai/service.ts";
 import type { ApplyService } from "./apply/service.ts";
+import type { DiscoveryService } from "./discovery/service.ts";
 import type { SseHub } from "./http/sse.ts";
 import type { JobFlow } from "./jobs/flow.ts";
 import type { JobService } from "./jobs/service.ts";
@@ -20,6 +21,8 @@ export type AppContext = {
   flow: JobFlow;
   /** Apply, manual or assisted, and the application record (M4). */
   apply: ApplyService;
+  /** Job boards, scans and alert imports (M5). */
+  discovery: DiscoveryService;
   snapshots: SnapshotCache;
   /** Fetches and extracts a posting page (injectable so tests never touch the network). */
   fetchPosting: (url: string) => Promise<Snapshot>;

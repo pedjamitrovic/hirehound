@@ -12,6 +12,7 @@ import {
   type JobDetail,
   NoteBody,
   type PostingDraft,
+  PostingTextBody,
   PreviewRequest,
   TailorBody,
   TransitionBody,
@@ -132,6 +133,13 @@ export function jobRoutes(router: Router, app: AppContext): void {
     const req = await body(TransitionBody);
     const record = requireJob(app, params.id);
     return toJobDetail(await app.jobs.transition(record.id, req));
+  });
+
+  /** Replaces the posting text: for postings imported without it (LinkedIn alerts). */
+  router.put("/api/jobs/:id/posting", async ({ params, body }) => {
+    const { text } = await body(PostingTextBody);
+    const record = requireJob(app, params.id);
+    return toJobDetail(await app.jobs.setPostingText(record.id, text));
   });
 
   router.post("/api/jobs/:id/notes", async ({ params, body }) => {

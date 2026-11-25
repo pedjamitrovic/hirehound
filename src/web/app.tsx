@@ -16,6 +16,7 @@ import { PipelineScreen } from "./screens/Pipeline.tsx";
 import { Placeholder } from "./screens/Placeholder.tsx";
 import { ProfileScreen } from "./screens/Profile.tsx";
 import { SettingsScreen } from "./screens/Settings.tsx";
+import { SourcesScreen } from "./screens/Sources.tsx";
 import { TodayScreen } from "./screens/Today.tsx";
 import { addJobOpen, moveRequest } from "./state/actions.ts";
 import { loadError, loaded, refresh, startSync } from "./state/store.ts";
@@ -53,15 +54,7 @@ function Screen(props: { route: Route } & ScreenProps) {
     case "onboarding":
       return <OnboardingScreen frame={props.frame} />;
     case "sources":
-      return (
-        <Placeholder
-          frame={props.frame}
-          title="Sources"
-          icon="sources"
-          milestone="M5"
-          text="Watched companies, job board scans and their schedule arrive with discovery."
-        />
-      );
+      return <SourcesScreen frame={props.frame} />;
     case "insights":
       return (
         <Placeholder
